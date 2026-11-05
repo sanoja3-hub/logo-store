@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Image as ImageIcon, ImagePlus, Minus, Plus, RotateCcw, X } from 'lucide-react';
+import { Box, ImagePlus, Minus, Plus, Rotate3d, RotateCcw, X } from 'lucide-react';
 import { formatoDinero } from '../core/dinero';
 import {
   TECNICAS,
   UBICACIONES,
   nuevoId,
+  tieneModelo3D,
   ubicacionesPara,
   type Ajustes,
   type ColorProducto,
@@ -14,7 +15,8 @@ import {
   type Tecnica,
   type Ubicacion,
 } from '../core/modelo';
-import { Aviso, Boton, Etiqueta, Foto } from '../ui/comunes';
+import { Aviso, Boton, Etiqueta } from '../ui/comunes';
+import { Foto3D, type Foto3DRef } from '../visor3d/Foto3D';
 import { Visor3D, type Visor3DRef } from '../visor3d/Visor3D';
 import { leerLogo } from './logo';
 
@@ -47,7 +49,16 @@ export function DetalleProducto({
   const [tecnica, setTecnica] = useState<Tecnica>(lineaInicial?.tecnica ?? 'Bordado');
   const [escala, setEscala] = useState(1);
   const [nota, setNota] = useState(lineaInicial?.nota ?? '');
-  const [vista, setVista] = useState<'3d' | 'foto'>('3d');
+  const hayModelo = tieneModelo3D(p.forma);
+  // «Foto 3D» (la foto real girando) es la vista principal cuando el catálogo trae foto.
+  const [vista, setVista] = useState<'foto3d' | 'modelo' | number>(p.foto ? 'foto3d' : 'modelo');
+  const [modeloIniciado, setModeloIniciado] = useState(!p.foto || !!logo);
+  const [ladoFoto, setLadoFoto] = useState<'frente' | 'espalda'>('frente');
+  const foto3d = useRef<Foto3DRef>(null);
+  const detalles = p.fotos ?? [];
+  useEffect(() => {
+    if (vista === 'modelo' || logo) setModeloIniciado(true);
+  }, [vista, logo]);
   const [avisosLogo, setAvisosLogo] = useState<string[]>([]);
   const [errorLogo, setErrorLogo] = useState<string | null>(null);
   const visor = useRef<Visor3DRef>(null);
@@ -79,7 +90,7 @@ export function DetalleProducto({
     if (r.logo) {
       onLogo(r.logo);
       if (ubicacion === 'sin_logo') setUbicacion(ubicaciones[0]);
-      setVista('3d');
+      if (hayModelo) setVista('modelo');
     }
   };
 
@@ -87,7 +98,7 @@ export function DetalleProducto({
     // Captura de la prenda tal como la configuró el cliente (frente o espalda según el logo).
     let vista3d: string | null = null;
     try {
-      vista3d = visor.current?.capturar(ubicacion === 'espalda' ? 'espalda' : ubicacion === 'manga' ? 'lado' : 'frente') ?? null;
+      vista3d = !hayModelo ? null : visor.current?.capturar(ubicacion === 'espalda' ? 'espalda' : ubicacion === 'manga' ? 'lado' : 'frente') ?? null;
     } catch {
       vista3d = null;
     }
@@ -97,7 +108,8 @@ export function DetalleProducto({
         productoId: p.id,
         codigo: p.codigo,
         nombre: p.nombre,
-        foto: p.foto,
+        // Si el catálogo trae la foto del color elegido, esa es la que ve el asesor.
+        foto: (p.colores.length && color.foto) || p.foto,
         forma: p.forma,
         color: p.colores.length ? color : null,
         cantidades: Object.fromEntries(Object.entries(cantidades).filter(([, n]) => n > 0)),
@@ -124,53 +136,127 @@ export function DetalleProducto({
         </button>
 
         {/* Escenario */}
-        <div className="estudio relative h-[46vh] shrink-0 lg:h-auto lg:flex-[1.15]">
+        <div className="estudio relative flex h-[50vh] shrink-0 flex-col lg:h-auto lg:flex-[1.15]">
           <div className="absolute left-3 top-3 z-10 inline-flex rounded-lg bg-white/90 p-1 shadow-sm ring-1 ring-tinta-200">
-            {(
-              [
-                ['3d', 'Vista 3D', Box],
-                ['foto', 'Foto', ImageIcon],
-              ] as const
-            ).map(([v, et, Icono]) => (
+            {p.foto && (
               <button
-                key={v}
-                onClick={() => setVista(v)}
+                onClick={() => setVista('foto3d')}
                 className={`foco inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ${
-                  vista === v ? 'bg-tinta-900 text-white' : 'text-tinta-600 hover:text-tinta-900'
+                  vista === 'foto3d' || typeof vista === 'number' ? 'bg-tinta-900 text-white' : 'text-tinta-600 hover:text-tinta-900'
                 }`}
               >
-                <Icono className="h-3.5 w-3.5" /> {et}
+                <Rotate3d className="h-3.5 w-3.5" /> Foto 3D
               </button>
-            ))}
+            )}
+            {hayModelo && (
+              <button
+                onClick={() => setVista('modelo')}
+                className={`foco inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-xs font-medium ${
+                  vista === 'modelo' ? 'bg-tinta-900 text-white' : 'text-tinta-600 hover:text-tinta-900'
+                }`}
+              >
+                <Box className="h-3.5 w-3.5" /> {logo ? 'Con tu logo' : 'Modelo 3D'}
+              </button>
+            )}
           </div>
-          <div className={vista === '3d' ? 'h-full' : 'hidden'}>
-            <Visor3D
-              ref={visor}
-              className="h-full w-full cursor-grab active:cursor-grabbing"
-              forma={p.forma}
-              colorHex={color.hex}
-              logo={logo?.dataUrl ?? null}
-              ubicacion={logo ? ubicacion : 'sin_logo'}
-              escalaLogo={escala}
-            />
-            <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
-              <div className="pointer-events-auto inline-flex rounded-lg bg-white/90 p-1 shadow-sm ring-1 ring-tinta-200">
-                {(['frente', 'espalda', 'lado'] as const).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => visor.current?.verVista(v)}
-                    className="foco h-8 rounded-md px-3 text-xs font-medium capitalize text-tinta-600 hover:bg-tinta-100 hover:text-tinta-900"
-                  >
-                    {v}
-                  </button>
-                ))}
+
+          <div className="relative min-h-0 flex-1">
+            {hayModelo && modeloIniciado && (
+              <div className={vista === 'modelo' ? 'absolute inset-0' : 'invisible absolute inset-0'} aria-hidden={vista !== 'modelo'}>
+                <Visor3D
+                  ref={visor}
+                  className="h-full w-full cursor-grab active:cursor-grabbing"
+                  forma={p.forma}
+                  colorHex={color.hex}
+                  logo={logo?.dataUrl ?? null}
+                  ubicacion={logo ? ubicacion : 'sin_logo'}
+                  escalaLogo={escala}
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
+                  <div className="pointer-events-auto inline-flex rounded-lg bg-white/90 p-1 shadow-sm ring-1 ring-tinta-200">
+                    {(['frente', 'espalda', 'lado'] as const).map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => visor.current?.verVista(v)}
+                        className="foco h-8 rounded-md px-3 text-xs font-medium capitalize text-tinta-600 hover:bg-tinta-100 hover:text-tinta-900"
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="text-[11px] text-tinta-500">
+                    Arrastra para girar · Modelo de referencia en el color elegido{logo ? ', con tu logo' : ''}
+                  </div>
+                </div>
               </div>
-              <div className="text-[11px] text-tinta-500">Arrastra para girar · Representación 3D de referencia</div>
-            </div>
+            )}
+
+            {vista === 'foto3d' && p.foto && (
+              <div className="absolute inset-0 pb-14 pt-12 sm:pb-16">
+                <Foto3D
+                  key={p.id}
+                  ref={foto3d}
+                  frente={p.foto}
+                  espalda={p.fotoEspalda}
+                  alt={p.nombre}
+                  onLado={setLadoFoto}
+                  className="h-full w-full cursor-grab active:cursor-grabbing"
+                />
+                <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
+                  {p.fotoEspalda ? (
+                    <div className="pointer-events-auto inline-flex rounded-lg bg-white/90 p-1 shadow-sm ring-1 ring-tinta-200">
+                      {(['frente', 'espalda'] as const).map((v) => (
+                        <button
+                          key={v}
+                          onClick={() => foto3d.current?.verLado(v)}
+                          className={`foco h-8 rounded-md px-3 text-xs font-medium capitalize ${
+                            ladoFoto === v ? 'bg-tinta-100 text-tinta-900' : 'text-tinta-600 hover:bg-tinta-100 hover:text-tinta-900'
+                          }`}
+                        >
+                          {v}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                  <div className="hidden text-[11px] text-tinta-500 sm:block">
+                    {p.fotoEspalda ? 'Arrastra para girar y ver la espalda' : 'Arrastra para inclinar'} · Foto real del catálogo
+                  </div>
+                </div>
+                {color.foto && p.colores.length > 1 && (
+                  <div className="pointer-events-none absolute right-3 top-14 hidden w-24 rounded-lg bg-white/95 p-1.5 text-center shadow-sm ring-1 ring-tinta-200 sm:block">
+                    <img src={color.foto} alt={color.nombre} className="mx-auto h-20 w-full object-contain" />
+                    <div className="mt-1 truncate text-[10px] font-medium text-tinta-700">{color.nombre}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {typeof vista === 'number' && detalles[vista] && (
+              <div className="absolute inset-0 flex items-center justify-center p-4 pt-14">
+                <img src={detalles[vista]} alt={`${p.nombre} · detalle ${vista + 1}`} className="max-h-full max-w-full rounded-lg object-contain shadow-sm" />
+              </div>
+            )}
           </div>
-          {vista === 'foto' && (
-            <div className="flex h-full items-center justify-center bg-white p-6 pt-14">
-              <Foto src={p.foto} alt={p.nombre} className="max-h-full max-w-full" />
+
+          {/* Fotos del catálogo */}
+          {p.foto && (p.fotoEspalda || detalles.length > 0) && (
+            <div className="flex shrink-0 gap-2 overflow-x-auto px-3 pb-3 pt-1">
+              {[
+                { clave: 'frente', src: p.foto, activa: vista === 'foto3d' && ladoFoto === 'frente', ir: () => { setVista('foto3d'); setTimeout(() => foto3d.current?.verLado('frente'), 0); } },
+                ...(p.fotoEspalda
+                  ? [{ clave: 'espalda', src: p.fotoEspalda, activa: vista === 'foto3d' && ladoFoto === 'espalda', ir: () => { setVista('foto3d'); setTimeout(() => foto3d.current?.verLado('espalda'), 0); } }]
+                  : []),
+                ...detalles.map((src, i) => ({ clave: `d${i}`, src, activa: vista === i, ir: () => setVista(i) })),
+              ].map((f) => (
+                <button
+                  key={f.clave}
+                  onClick={f.ir}
+                  aria-label={f.clave === 'frente' ? 'Ver frente' : f.clave === 'espalda' ? 'Ver espalda' : 'Ver detalle'}
+                  className={`foco h-14 w-14 shrink-0 overflow-hidden rounded-md bg-white ${f.activa ? 'ring-2 ring-tinta-900' : 'ring-1 ring-tinta-200 hover:ring-tinta-400'}`}
+                >
+                  <img src={f.src} alt="" className="h-full w-full object-cover" />
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -194,23 +280,56 @@ export function DetalleProducto({
               {p.minimo > 0 && <div className="mt-1 text-xs text-tinta-500">Pedido mínimo: {p.minimo} unidades</div>}
             </div>
 
+            {p.ficha && p.ficha.length > 0 && (
+              <section>
+                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-tinta-500">Ficha técnica</h3>
+                <dl className="divide-y divide-tinta-100 rounded-lg border border-tinta-200 text-sm">
+                  {p.ficha.map((d) => (
+                    <div key={d.titulo} className={`grid grid-cols-[110px_1fr] gap-3 px-3 py-2 ${d.titulo === 'Advertencia' ? 'bg-amber-50/70' : ''}`}>
+                      <dt className="text-xs font-medium text-tinta-500">{d.titulo}</dt>
+                      <dd className="text-tinta-800">{d.texto}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </section>
+            )}
+
             {/* Color */}
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-tinta-500">
                 Color <span className="ml-1 font-normal normal-case tracking-normal text-tinta-700">{color.nombre}</span>
               </h3>
               <div className="flex flex-wrap gap-2">
-                {colores.map((c) => (
-                  <button
-                    key={c.nombre}
-                    onClick={() => setColor(c)}
-                    title={c.nombre}
-                    className={`foco h-9 w-9 rounded-full ring-offset-2 transition ${
-                      color.nombre === c.nombre ? 'ring-2 ring-tinta-900' : 'ring-1 ring-tinta-200 hover:ring-tinta-400'
-                    }`}
-                    style={{ background: c.hex }}
-                  />
-                ))}
+                {colores.map((c) =>
+                  c.foto ? (
+                    <button
+                      key={c.nombre}
+                      onClick={() => setColor(c)}
+                      title={c.nombre}
+                      aria-label={`Color ${c.nombre}`}
+                      className={`foco relative h-14 w-12 overflow-hidden rounded-lg bg-white transition ${
+                        color.nombre === c.nombre ? 'ring-2 ring-tinta-900' : 'ring-1 ring-tinta-200 hover:ring-tinta-400'
+                      }`}
+                    >
+                      <img src={c.foto} alt="" className="h-10 w-full object-contain" />
+                      <span className="absolute inset-x-0 bottom-0 flex h-4 items-center justify-center gap-1 text-[10px] font-semibold text-tinta-700">
+                        <span className="h-2 w-2 rounded-full ring-1 ring-black/10" style={{ background: c.hex }} />
+                        {c.codigo ?? ''}
+                      </span>
+                    </button>
+                  ) : (
+                    <button
+                      key={c.nombre}
+                      onClick={() => setColor(c)}
+                      title={c.nombre}
+                      aria-label={`Color ${c.nombre}`}
+                      className={`foco h-9 w-9 rounded-full ring-offset-2 transition ${
+                        color.nombre === c.nombre ? 'ring-2 ring-tinta-900' : 'ring-1 ring-tinta-200 hover:ring-tinta-400'
+                      }`}
+                      style={{ background: c.hex }}
+                    />
+                  ),
+                )}
               </div>
             </section>
 
@@ -260,6 +379,7 @@ export function DetalleProducto({
             </section>
 
             {/* Logo */}
+            {hayModelo ? (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-tinta-500">Logo de tu empresa</h3>
               <input
@@ -351,6 +471,11 @@ export function DetalleProducto({
                 </div>
               )}
             </section>
+            ) : (
+              <p className="text-xs text-tinta-500">
+                Este artículo no tiene vista con logo. Si quieres personalizarlo, indícalo abajo y el asesor te confirmará.
+              </p>
+            )}
 
             <label className="block">
               <span className="mb-1 block text-xs font-medium text-tinta-600">Indicaciones para este artículo (opcional)</span>

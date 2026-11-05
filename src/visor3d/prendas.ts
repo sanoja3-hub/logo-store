@@ -313,6 +313,7 @@ function malla(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
 function superior(forma: Forma3D, tela: THREE.MeshPhysicalMaterial, hex: string): PrendaConstruida {
   const grupo = new THREE.Group();
   const abrigo = forma === 'chaqueta' || forma === 'chaleco';
+  const esCamisa = forma === 'camisa' || forma === 'camisa_corta';
   const k = abrigo ? 1.07 : 1;
   const t = torso({
     alto: abrigo ? 0.7 : 0.68,
@@ -322,7 +323,7 @@ function superior(forma: Forma3D, tela: THREE.MeshPhysicalMaterial, hex: string)
     cuelloB: abrigo ? 0.08 : 0.072,
     caidaHombro: 0.07,
     perfil:
-      forma === 'camisa'
+      esCamisa
         ? [[0, 0.97], [0.45, 0.93], [0.8, 1.0], [1, 1.0]]
         : abrigo
           ? [[0, 0.98], [0.5, 0.97], [0.8, 1.02], [1, 1.0]]
@@ -389,7 +390,7 @@ function superior(forma: Forma3D, tela: THREE.MeshPhysicalMaterial, hex: string)
     const tapeta = lineaFrontal(cuerpo, t.ySisa - 0.05, 0.665);
     if (tapeta.length > 2) grupo.add(borde(tapeta, 0.012, tela, false));
     for (const b of botones(cuerpo, [0.62, 0.585], detalle)) grupo.add(b);
-  } else if (forma === 'camisa') {
+  } else if (esCamisa) {
     grupo.add(
       malla(cuelloPerfilado(t.cuello, [[0, 0], [0.003, 0.028], [0.012, 0.042], [0.03, 0.03], [0.06, -0.012]], 0.12), tela),
     );

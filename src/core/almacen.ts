@@ -67,7 +67,7 @@ export async function cargarCatalogoPublico(): Promise<{ catalogo: Catalogo; fue
   if (local && (!web || (local.publicadoEn ?? '') > (web.publicadoEn ?? ''))) return { catalogo: local, fuente: 'local' };
   if (web) return { catalogo: web, fuente: 'web' };
   if (__DEMO__) {
-    const demo = (await import('../demo/catalogo-demo.json')).default as unknown;
+    const demo = (await import('catalogo-demo.json')).default as unknown;
     if (esCatalogo(demo)) return { catalogo: demo, fuente: 'demo' };
   }
   return { catalogo: catalogoVacio(), fuente: 'vacio' };

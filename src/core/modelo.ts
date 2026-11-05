@@ -5,24 +5,44 @@ export type Forma3D =
   | 'franela'
   | 'chemise'
   | 'camisa'
+  | 'camisa_corta'
   | 'chaqueta'
   | 'chaleco'
   | 'pantalon'
-  | 'gorra';
+  | 'gorra'
+  /** Calzado, correas y accesorios: no hay modelo 3D genérico, se muestra la foto real en 3D. */
+  | 'otro';
 
 export const FORMAS_3D: { valor: Forma3D; etiqueta: string }[] = [
   { valor: 'franela', etiqueta: 'Franela / camiseta' },
   { valor: 'chemise', etiqueta: 'Chemise (polo)' },
   { valor: 'camisa', etiqueta: 'Camisa manga larga' },
+  { valor: 'camisa_corta', etiqueta: 'Camisa manga corta' },
   { valor: 'chaqueta', etiqueta: 'Chaqueta / abrigo' },
   { valor: 'chaleco', etiqueta: 'Chaleco' },
   { valor: 'pantalon', etiqueta: 'Pantalón' },
   { valor: 'gorra', etiqueta: 'Gorra' },
+  { valor: 'otro', etiqueta: 'Otro (calzado, accesorios): solo foto' },
 ];
+
+/** Formas que tienen un modelo 3D genérico donde se puede poner el logo. */
+export function tieneModelo3D(forma: Forma3D): boolean {
+  return forma !== 'otro';
+}
 
 export interface ColorProducto {
   nombre: string;
   hex: string;
+  /** Código del color en el catálogo del proveedor (ej. «06»). */
+  codigo?: string;
+  /** Foto pequeña de la prenda en ese color, si el catálogo la trae. */
+  foto?: string | null;
+}
+
+/** Dato de la ficha técnica tal como viene en el catálogo (Tallas, Material, Características…). */
+export interface DatoFicha {
+  titulo: string;
+  texto: string;
 }
 
 export interface Producto {
@@ -38,8 +58,14 @@ export interface Producto {
   precioCentavos: number | null;
   /** Unidades mínimas por pedido de este artículo (0 = sin mínimo). */
   minimo: number;
-  /** Foto del artículo (data URL webp/jpeg) o null si no se pudo leer. */
+  /** Foto del artículo (data URL webp/jpeg) o null si no se pudo leer. Es el frente en la vista «Foto 3D». */
   foto: string | null;
+  /** Foto de la espalda, si el catálogo la trae: es la otra cara en la vista «Foto 3D». */
+  fotoEspalda?: string | null;
+  /** Fotos de detalle (bolsillos, cierres, suela…). */
+  fotos?: string[];
+  /** Ficha técnica tal como viene en el catálogo. */
+  ficha?: DatoFicha[];
   /** De dónde salió, para revisar contra el catálogo original. */
   origen: string;
   /** Avisos de la importación que el administrador debe revisar. */
@@ -75,6 +101,7 @@ export const UBICACIONES: Record<Ubicacion, string> = {
 };
 
 export function ubicacionesPara(forma: Forma3D): Ubicacion[] {
+  if (forma === 'otro') return ['sin_logo'];
   if (forma === 'gorra') return ['frente_gorra', 'sin_logo'];
   if (forma === 'pantalon') return ['pecho_izquierdo', 'sin_logo'];
   if (forma === 'chaleco') return ['pecho_izquierdo', 'pecho_centro', 'espalda', 'sin_logo'];

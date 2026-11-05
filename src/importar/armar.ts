@@ -45,7 +45,10 @@ export function categoriaDe(forma: Producto['forma']): string {
     case 'chaleco':
       return 'Chaquetas y chalecos';
     case 'camisa':
+    case 'camisa_corta':
       return 'Camisas';
+    case 'otro':
+      return 'Accesorios';
     default:
       return 'Franelas y chemises';
   }

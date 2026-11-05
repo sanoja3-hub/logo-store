@@ -158,7 +158,9 @@ export function Tienda() {
 
         {fuente === 'demo' && (
           <div className="mb-4 rounded-lg border border-acento-100 bg-acento-50 px-3 py-2 text-xs text-acento-600">
-            Demostración: los artículos, fotos y precios son de ejemplo. Para cargar tu catálogo usa el botón del engranaje (Administrar catálogo), arriba a la derecha.
+            {__DEMO_EJEMPLO__
+              ? 'Demostración: los artículos, fotos y precios son de ejemplo. Para cargar tu catálogo usa el botón del engranaje (Administrar catálogo), arriba a la derecha.'
+              : 'Vista previa del catálogo. Los precios que no trae el catálogo salen «por confirmar» y el asesor los indica al recibir la orden.'}
           </div>
         )}
         {fuente === 'local' && (
