@@ -1,0 +1,60 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+  --color-tinta-50: #f5f7fa;
+  --color-tinta-100: #eaeef4;
+  --color-tinta-200: #d5dce6;
+  --color-tinta-300: #b3bdcc;
+  --color-tinta-400: #8592a6;
+  --color-tinta-500: #5f6b7f;
+  --color-tinta-600: #465165;
+  --color-tinta-700: #323c4e;
+  --color-tinta-800: #1d2638;
+  --color-tinta-900: #10203f;
+  --color-tinta-950: #0a1428;
+
+  --color-acento-50: #fbf7ec;
+  --color-acento-100: #f4ead0;
+  --color-acento-500: #b8913a;
+  --color-acento-600: #9a7628;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  @apply bg-tinta-50 text-tinta-900 antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+.estudio {
+  background:
+    radial-gradient(ellipse 70% 55% at 50% 42%, #ffffff 0%, #f1f3f7 55%, #e3e7ee 100%);
+}
+
+.foco {
+  @apply outline-none focus-visible:ring-2 focus-visible:ring-tinta-900/40 focus-visible:ring-offset-2;
+}
+
+input[type='number']::-webkit-inner-spin-button,
+input[type='number']::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+@keyframes entrar-derecha {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+@keyframes aparecer {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.panel-entra { animation: entrar-derecha 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.aparece { animation: aparecer 0.25s ease-out; }
