@@ -8,6 +8,7 @@ import { categoriaDe } from '../importar/armar';
 import { normalizarFoto } from '../importar/imagenes';
 import type { ResultadoImportacion } from '../importar/tipos';
 import { descargar } from '../pedido/documentos';
+import { ir } from '../ruta';
 import { AreaTexto, Aviso, Boton, Campo, Etiqueta, Foto } from '../ui/comunes';
 
 type Pestana = 'importar' | 'revisar' | 'ajustes' | 'publicar';
@@ -42,9 +43,9 @@ export function Admin() {
     <div className="min-h-screen">
       <header className="border-b border-tinta-200 bg-tinta-900 text-white">
         <div className="mx-auto flex max-w-6xl items-center gap-3 px-4 py-4 sm:px-6">
-          <a href="#/" className="foco rounded-md p-1.5 text-tinta-200 hover:bg-white/10 hover:text-white" aria-label="Volver al catálogo">
+          <button onClick={() => ir('tienda')} className="foco inline-flex items-center gap-1.5 rounded-md p-1.5 text-sm text-tinta-200 hover:bg-white/10 hover:text-white" aria-label="Volver al catálogo">
             <ArrowLeft className="h-5 w-5" />
-          </a>
+          </button>
           <div>
             <div className="text-[15px] font-semibold">Panel del catálogo</div>
             <div className="text-xs text-tinta-300">{cat.ajustes.empresa} · {cat.productos.length} artículos en borrador</div>
@@ -534,9 +535,9 @@ function Publicar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | n
             >
               <Eye className="h-4 w-4" /> Publicar en este navegador
             </Boton>
-            <a href="#/" className="foco inline-flex h-10 items-center rounded-lg px-4 text-sm font-medium text-tinta-700 hover:bg-tinta-100">
+            <button onClick={() => ir('tienda')} className="foco inline-flex h-10 items-center rounded-lg px-4 text-sm font-medium text-tinta-700 hover:bg-tinta-100">
               Abrir el catálogo
-            </a>
+            </button>
           </div>
         </div>
         <div className="rounded-2xl bg-white p-6 ring-1 ring-tinta-200">

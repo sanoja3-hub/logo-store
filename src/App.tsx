@@ -1,18 +1,21 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
 import { Tienda } from './tienda/Tienda';
+import { rutaActual, type Ruta } from './ruta';
 
 const Admin = lazy(() => import('./admin/Admin').then((m) => ({ default: m.Admin })));
 
-function rutaActual() {
-  return window.location.hash.startsWith('#/admin') ? 'admin' : 'tienda';
-}
 
 export function App() {
-  const [ruta, setRuta] = useState(rutaActual);
+  const [ruta, setRuta] = useState<Ruta>(rutaActual);
   useEffect(() => {
     const cambio = () => setRuta(rutaActual());
+    const propio = (e: Event) => setRuta((e as CustomEvent<Ruta>).detail);
     window.addEventListener('hashchange', cambio);
-    return () => window.removeEventListener('hashchange', cambio);
+    window.addEventListener('atelier:ruta', propio);
+    return () => {
+      window.removeEventListener('hashchange', cambio);
+      window.removeEventListener('atelier:ruta', propio);
+    };
   }, []);
   if (ruta === 'admin') {
     return (

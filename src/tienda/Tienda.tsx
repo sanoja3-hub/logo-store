@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ImagePlus, Search, ShoppingBag } from 'lucide-react';
+import { Check, ImagePlus, Search, Settings, ShoppingBag } from 'lucide-react';
+import { ir } from '../ruta';
 import { almacen, cargarCatalogoPublico } from '../core/almacen';
 import { formatoDinero } from '../core/dinero';
 import { CLIENTE_VACIO, type Catalogo, type Cliente, type LineaPedido, type LogoCliente, type Producto } from '../core/modelo';
@@ -105,6 +106,14 @@ export function Tienda() {
             <BuscadorCampo valor={busqueda} onCambio={setBusqueda} />
           </div>
           <div className="ml-auto flex items-center gap-2">
+            <button
+              onClick={() => ir('admin')}
+              title="Cargar o editar el catálogo"
+              className="foco inline-flex h-10 items-center gap-2 rounded-lg border border-tinta-200 bg-white px-3 text-sm text-tinta-700 hover:border-tinta-300"
+            >
+              <Settings className="h-4 w-4" />
+              <span className="hidden lg:inline">Administrar catálogo</span>
+            </button>
             <EtiquetaLogo logo={logo} onSubir={() => setPedidoAbierto(true)} />
             <button
               onClick={() => setPedidoAbierto(true)}
@@ -149,7 +158,7 @@ export function Tienda() {
 
         {fuente === 'demo' && (
           <div className="mb-4 rounded-lg border border-acento-100 bg-acento-50 px-3 py-2 text-xs text-acento-600">
-            Demostración: los artículos, fotos y precios son de ejemplo. Carga tu propio catálogo desde «Administración», al pie de la página.
+            Demostración: los artículos, fotos y precios son de ejemplo. Para cargar tu catálogo usa el botón del engranaje (Administrar catálogo), arriba a la derecha.
           </div>
         )}
         {fuente === 'local' && (
@@ -181,9 +190,9 @@ export function Tienda() {
             <p className="mx-auto mt-1 max-w-md text-sm text-tinta-500">
               Importa tu catálogo en PDF o Excel desde el panel de administración y publícalo.
             </p>
-            <a href="#/admin" className="mt-4 inline-block text-sm font-medium text-tinta-900 underline">
+            <button onClick={() => ir('admin')} className="mt-4 inline-block text-sm font-medium text-tinta-900 underline">
               Ir al panel
-            </a>
+            </button>
           </div>
         ) : visibles.length === 0 ? (
           <div className="py-16 text-center text-sm text-tinta-500">No hay artículos que coincidan con la búsqueda.</div>
@@ -234,9 +243,9 @@ export function Tienda() {
           <span>
             © {new Date().getFullYear()} {ajustes.empresa}. Precios al mayor referenciales, sujetos a confirmación.
           </span>
-          <a href="#/admin" className="hover:text-tinta-900">
+          <button onClick={() => ir('admin')} className="hover:text-tinta-900">
             Administración
-          </a>
+          </button>
         </div>
       </footer>
 
