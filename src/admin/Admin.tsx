@@ -6,7 +6,7 @@ import { aCentavos, formatoDinero } from '../core/dinero';
 import { leerTallas } from '../core/interpretar';
 import { FORMAS_3D, nuevoId, type Ajustes, type Catalogo, type Forma3D, type Producto } from '../core/modelo';
 import { categoriaDe } from '../importar/armar';
-import { normalizarFoto } from '../importar/imagenes';
+import { normalizarFoto, reducirImagen } from '../importar/imagenes';
 import { abrirPaquete, aplicarFotos, armarPaquete } from '../importar/paquete';
 import type { ResultadoImportacion } from '../importar/tipos';
 import { descargar } from '../pedido/documentos';
@@ -533,8 +533,34 @@ function FichaEditable({ p, onCambio, onBorrar }: { p: Producto; onCambio: (c: P
 
 function AjustesForm({ ajustes, onCambio }: { ajustes: Ajustes; onCambio: (a: Ajustes) => void }) {
   const set = <K extends keyof Ajustes>(k: K, v: Ajustes[K]) => onCambio({ ...ajustes, [k]: v });
+  const entradaPortada = useRef<HTMLInputElement>(null);
   return (
     <div className="max-w-2xl space-y-4 rounded-2xl bg-white p-6 ring-1 ring-tinta-200">
+      <div>
+        <span className="mb-1 block text-xs font-medium text-tinta-600">Portada (imagen de la empresa arriba del catálogo)</span>
+        {ajustes.portada && <img src={ajustes.portada} alt="Portada" className="mb-2 max-h-48 w-full rounded-lg object-cover ring-1 ring-tinta-200" />}
+        <div className="flex gap-2">
+          <Boton variante="secundario" tamano="sm" onClick={() => entradaPortada.current?.click()}>
+            <ImagePlus className="h-4 w-4" /> {ajustes.portada ? 'Cambiar portada' : 'Subir portada'}
+          </Boton>
+          {ajustes.portada && (
+            <Boton variante="peligro" tamano="sm" onClick={() => set('portada', null)}>
+              Quitar portada
+            </Boton>
+          )}
+        </div>
+        <input
+          ref={entradaPortada}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (f) set('portada', await reducirImagen(f));
+            e.target.value = '';
+          }}
+        />
+      </div>
       <Campo etiqueta="Nombre de la empresa" value={ajustes.empresa} onChange={(e) => set('empresa', e.target.value)} />
       <Campo etiqueta="Lema" value={ajustes.lema} onChange={(e) => set('lema', e.target.value)} />
       <Campo

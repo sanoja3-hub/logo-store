@@ -48,7 +48,18 @@ export async function armarPaquete(cat: Catalogo): Promise<{ zip: Blob; avisos: 
       }),
     );
   }
-  zip.file('catalogo.json', JSON.stringify({ ...cat, productos }));
+  let portada = cat.ajustes.portada ?? null;
+  if (portada) {
+    try {
+      const blob = await aBlob(portada);
+      portada = `${CARPETA_FOTOS}/portada.${EXT[blob.type] ?? 'webp'}`;
+      zip.file(portada, blob);
+    } catch {
+      avisos.push('No se pudo leer la portada: se publica sin ella.');
+      portada = null;
+    }
+  }
+  zip.file('catalogo.json', JSON.stringify({ ...cat, ajustes: { ...cat.ajustes, portada }, productos }));
   return { zip: await zip.generateAsync({ type: 'blob' }), avisos };
 }
 
@@ -68,21 +79,19 @@ export async function abrirPaquete(archivo: File): Promise<{ catalogo: Catalogo;
   const raiz = entrada.name.replace(/catalogo\.json$/i, '');
   const j = JSON.parse(await entrada.async('string'));
   if (!esCatalogo(j)) throw new Error('El catalogo.json del .zip no es un catálogo válido.');
-  const productos = await Promise.all(
-    j.productos.map((p) =>
-      mapearFotos(p, async (foto) => {
-        if (esDataUrl(foto)) return foto;
-        const f = zip.file(raiz + foto.replace(/^\.?\//, ''));
-        if (!f) {
-          avisos.push(`Falta ${foto} en el .zip.`);
-          return null;
-        }
-        const ext = foto.split('.').pop()?.toLowerCase() ?? '';
-        return aDataUrl(new Blob([await f.async('arraybuffer')], { type: MIME[ext] ?? 'image/webp' }));
-      }),
-    ),
-  );
-  return { catalogo: { ...j, productos }, avisos };
+  const leer = async (foto: string) => {
+    if (esDataUrl(foto)) return foto;
+    const f = zip.file(raiz + foto.replace(/^\.?\//, ''));
+    if (!f) {
+      avisos.push(`Falta ${foto} en el .zip.`);
+      return null;
+    }
+    const ext = foto.split('.').pop()?.toLowerCase() ?? '';
+    return aDataUrl(new Blob([await f.async('arraybuffer')], { type: MIME[ext] ?? 'image/webp' }));
+  };
+  const productos = await Promise.all(j.productos.map((p) => mapearFotos(p, leer)));
+  const portada = j.ajustes.portada ? await leer(j.ajustes.portada) : null;
+  return { catalogo: { ...j, ajustes: { ...j.ajustes, portada }, productos }, avisos };
 }
 
 /**

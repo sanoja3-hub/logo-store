@@ -133,6 +133,9 @@ export function Tienda() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 pb-24 pt-6 sm:px-6">
+        {ajustes.portada && (
+          <img src={ajustes.portada} alt={ajustes.empresa} className="mb-6 block max-h-[420px] w-full rounded-2xl object-cover" />
+        )}
         <section className="mb-6 overflow-hidden rounded-2xl bg-tinta-900 text-white">
           <div className="grid gap-6 px-6 py-7 sm:px-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
             <div>

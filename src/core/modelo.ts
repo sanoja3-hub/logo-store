@@ -82,6 +82,8 @@ export interface Ajustes {
   correoAsesor: string;
   moneda: string;
   mostrarPrecios: boolean;
+  /** Imagen de portada de la empresa, arriba del catálogo (data URL o `fotos/portada.jpg`). */
+  portada?: string | null;
 }
 
 export interface Catalogo {

@@ -38,6 +38,7 @@ function catalogoIncrustado(): Plugin {
         return `data:${MIME[ext] ?? 'image/webp'};base64,${fs.readFileSync(ruta).toString('base64')}`;
       };
       const cat = JSON.parse(fs.readFileSync(catalogoDemo, 'utf8'));
+      if (cat.ajustes) cat.ajustes.portada = incrustar(cat.ajustes.portada);
       for (const p of cat.productos ?? []) {
         p.foto = incrustar(p.foto);
         p.fotoEspalda = incrustar(p.fotoEspalda);

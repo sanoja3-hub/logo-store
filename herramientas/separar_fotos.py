@@ -60,6 +60,8 @@ def main(entrada: str, destino: str) -> None:
             c["foto"] = guardar(c.get("foto"), f"{base}-muestra-{color}")
             c["fotoProducto"] = guardar(c.get("fotoProducto"), f"{base}-color-{color}")
 
+    if cat.get("ajustes", {}).get("portada"):
+        cat["ajustes"]["portada"] = guardar(cat["ajustes"]["portada"], "portada")
     (salida / "catalogo.json").write_text(json.dumps(cat, ensure_ascii=False), encoding="utf-8")
     print(f"{len(cat['productos'])} artículos, {cuenta} fotos en {salida / 'fotos'}")
 
