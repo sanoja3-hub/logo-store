@@ -56,6 +56,10 @@ export function DetalleProducto({
   const [ladoFoto, setLadoFoto] = useState<'frente' | 'espalda'>('frente');
   const foto3d = useRef<Foto3DRef>(null);
   const detalles = p.fotos ?? [];
+  // Si el color elegido trae su propia foto, «Foto 3D» muestra la prenda en ese color (sin la espalda, que es de otro color).
+  const fotoColor = color.fotoProducto ?? null;
+  const frente = fotoColor ?? p.foto;
+  const espalda = fotoColor ? null : p.fotoEspalda;
   useEffect(() => {
     if (vista === 'modelo' || logo) setModeloIniciado(true);
   }, [vista, logo]);
@@ -109,7 +113,7 @@ export function DetalleProducto({
         codigo: p.codigo,
         nombre: p.nombre,
         // Si el catálogo trae la foto del color elegido, esa es la que ve el asesor.
-        foto: (p.colores.length && color.foto) || p.foto,
+        foto: color.fotoProducto || (p.colores.length && color.foto) || p.foto,
         forma: p.forma,
         color: p.colores.length ? color : null,
         cantidades: Object.fromEntries(Object.entries(cantidades).filter(([, n]) => n > 0)),
@@ -191,19 +195,19 @@ export function DetalleProducto({
               </div>
             )}
 
-            {vista === 'foto3d' && p.foto && (
+            {vista === 'foto3d' && frente && (
               <div className="absolute inset-0 pb-14 pt-12 sm:pb-16">
                 <Foto3D
-                  key={p.id}
+                  key={`${p.id}|${frente}`}
                   ref={foto3d}
-                  frente={p.foto}
-                  espalda={p.fotoEspalda}
+                  frente={frente}
+                  espalda={espalda}
                   alt={p.nombre}
                   onLado={setLadoFoto}
                   className="h-full w-full cursor-grab active:cursor-grabbing"
                 />
                 <div className="pointer-events-none absolute inset-x-0 bottom-3 flex flex-col items-center gap-2 px-3">
-                  {p.fotoEspalda ? (
+                  {espalda ? (
                     <div className="pointer-events-auto inline-flex rounded-lg bg-white/90 p-1 shadow-sm ring-1 ring-tinta-200">
                       {(['frente', 'espalda'] as const).map((v) => (
                         <button
@@ -219,15 +223,9 @@ export function DetalleProducto({
                     </div>
                   ) : null}
                   <div className="hidden text-[11px] text-tinta-500 sm:block">
-                    {p.fotoEspalda ? 'Arrastra para girar y ver la espalda' : 'Arrastra para inclinar'} · Foto real del catálogo
+                    {espalda ? 'Arrastra para girar y ver la espalda' : 'Arrastra para inclinar'} · {fotoColor ? `Color ${color.nombre}` : 'Foto real del catálogo'}
                   </div>
                 </div>
-                {color.foto && p.colores.length > 1 && (
-                  <div className="pointer-events-none absolute right-3 top-14 hidden w-24 rounded-lg bg-white/95 p-1.5 text-center shadow-sm ring-1 ring-tinta-200 sm:block">
-                    <img src={color.foto} alt={color.nombre} className="mx-auto h-20 w-full object-contain" />
-                    <div className="mt-1 truncate text-[10px] font-medium text-tinta-700">{color.nombre}</div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -239,12 +237,12 @@ export function DetalleProducto({
           </div>
 
           {/* Fotos del catálogo */}
-          {p.foto && (p.fotoEspalda || detalles.length > 0) && (
+          {frente && (espalda || detalles.length > 0) && (
             <div className="flex shrink-0 gap-2 overflow-x-auto px-3 pb-3 pt-1">
               {[
-                { clave: 'frente', src: p.foto, activa: vista === 'foto3d' && ladoFoto === 'frente', ir: () => { setVista('foto3d'); setTimeout(() => foto3d.current?.verLado('frente'), 0); } },
-                ...(p.fotoEspalda
-                  ? [{ clave: 'espalda', src: p.fotoEspalda, activa: vista === 'foto3d' && ladoFoto === 'espalda', ir: () => { setVista('foto3d'); setTimeout(() => foto3d.current?.verLado('espalda'), 0); } }]
+                { clave: 'frente', src: frente, activa: vista === 'foto3d' && ladoFoto === 'frente', ir: () => { setVista('foto3d'); setTimeout(() => foto3d.current?.verLado('frente'), 0); } },
+                ...(espalda
+                  ? [{ clave: 'espalda', src: espalda, activa: vista === 'foto3d' && ladoFoto === 'espalda', ir: () => { setVista('foto3d'); setTimeout(() => foto3d.current?.verLado('espalda'), 0); } }]
                   : []),
                 ...detalles.map((src, i) => ({ clave: `d${i}`, src, activa: vista === i, ir: () => setVista(i) })),
               ].map((f) => (
@@ -301,7 +299,7 @@ export function DetalleProducto({
               </h3>
               <div className="flex flex-wrap gap-2">
                 {colores.map((c) =>
-                  c.foto ? (
+                  c.foto || c.fotoProducto ? (
                     <button
                       key={c.nombre}
                       onClick={() => setColor(c)}
@@ -311,7 +309,7 @@ export function DetalleProducto({
                         color.nombre === c.nombre ? 'ring-2 ring-tinta-900' : 'ring-1 ring-tinta-200 hover:ring-tinta-400'
                       }`}
                     >
-                      <img src={c.foto} alt="" className="h-10 w-full object-contain" />
+                      <img src={(c.foto || c.fotoProducto)!} alt="" className="h-10 w-full object-contain" />
                       <span className="absolute inset-x-0 bottom-0 flex h-4 items-center justify-center gap-1 text-[10px] font-semibold text-tinta-700">
                         <span className="h-2 w-2 rounded-full ring-1 ring-black/10" style={{ background: c.hex }} />
                         {c.codigo ?? ''}

@@ -71,13 +71,13 @@ describe('fotos del catálogo', () => {
     foto: 'data:image/webp;base64,AAA',
     fotoEspalda: 'fotos/kv-101-a-espalda.webp',
     fotos: ['data:image/webp;base64,BBB'],
-    colores: [{ nombre: 'Blanco (01)', hex: '#fff', codigo: '01', foto: 'data:image/webp;base64,CCC' }],
+    colores: [{ nombre: 'Blanco (01)', hex: '#fff', codigo: '01', foto: 'data:image/webp;base64,CCC', fotoProducto: 'data:image/webp;base64,DDD' }],
   });
 
   it('quita todas las fotos sin tocar lo demás', () => {
     const [p] = quitarFotos([conFotos]);
     expect(p).toMatchObject({ foto: null, fotoEspalda: null, fotos: [], codigo: 'KV 101/A' });
-    expect(p.colores[0]).toMatchObject({ foto: null, codigo: '01', hex: '#fff' });
+    expect(p.colores[0]).toMatchObject({ foto: null, fotoProducto: null, codigo: '01', hex: '#fff' });
   });
 
   it('nombra los archivos con el código', async () => {
@@ -88,13 +88,14 @@ describe('fotos del catálogo', () => {
       nombres.push(nombre);
       return `fotos/${nombre}.webp`;
     });
-    expect(nombres.sort()).toEqual(['kv-101-a', 'kv-101-a-2', 'kv-101-a-color-01', 'kv-101-a-espalda']);
+    expect(nombres.sort()).toEqual(['kv-101-a', 'kv-101-a-2', 'kv-101-a-color-01', 'kv-101-a-espalda', 'kv-101-a-muestra-01']);
     expect(p.foto).toBe('fotos/kv-101-a.webp');
-    expect(p.colores[0].foto).toBe('fotos/kv-101-a-color-01.webp');
+    expect(p.colores[0].foto).toBe('fotos/kv-101-a-muestra-01.webp');
+    expect(p.colores[0].fotoProducto).toBe('fotos/kv-101-a-color-01.webp');
   });
 
   it('cuenta las fotos incrustadas', () => {
     const cat = { version: 1, ajustes: {}, productos: [conFotos], publicadoEn: null } as unknown as Catalogo;
-    expect(contarFotos(cat)).toEqual({ total: 4, incrustadas: 3 });
+    expect(contarFotos(cat)).toEqual({ total: 5, incrustadas: 4 });
   });
 });

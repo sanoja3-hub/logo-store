@@ -42,7 +42,10 @@ function catalogoIncrustado(): Plugin {
         p.foto = incrustar(p.foto);
         p.fotoEspalda = incrustar(p.fotoEspalda);
         p.fotos = (p.fotos ?? []).map(incrustar).filter(Boolean);
-        for (const c of p.colores ?? []) c.foto = incrustar(c.foto);
+        for (const c of p.colores ?? []) {
+          c.foto = incrustar(c.foto);
+          c.fotoProducto = incrustar(c.fotoProducto);
+        }
       }
       return `export default ${JSON.stringify(cat)};`;
     },

@@ -348,7 +348,7 @@ function Revisar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | nu
       <p className="mb-4 text-xs text-tinta-500">
         Fotos nuevas: nómbralas con el código del artículo, por ejemplo <span className="font-mono">2800.jpg</span> (frente),{' '}
         <span className="font-mono">2800-espalda.jpg</span>, <span className="font-mono">2800-2.jpg</span> (detalles) y{' '}
-        <span className="font-mono">2800-color-06.jpg</span> (miniatura del color 06). Puedes seleccionarlas todas a la vez.
+        <span className="font-mono">2800-color-06.jpg</span> (la prenda en el color 06). Puedes seleccionarlas todas a la vez.
       </p>
       {resultadoFotos && (
         <div className="mb-4">

@@ -4,7 +4,8 @@
     python3 herramientas/separar_fotos.py catalogo.json public/
 
 Escribe public/catalogo.json (liviano) y public/fotos/<codigo>.webp, <codigo>-espalda.webp, <codigo>-2.webp,
-<codigo>-color-<color>.webp: los mismos nombres que usa el panel al publicar el .zip.
+<codigo>-muestra-<color>.webp (muestra de la carta de colores) y <codigo>-color-<color>.webp (la prenda en
+ese color): los mismos nombres que usa el panel al publicar el .zip.
 """
 
 import base64
@@ -55,7 +56,9 @@ def main(entrada: str, destino: str) -> None:
         p["fotoEspalda"] = guardar(p.get("fotoEspalda"), f"{base}-espalda")
         p["fotos"] = [f for f in (guardar(f, f"{base}-{i + 2}") for i, f in enumerate(p.get("fotos") or [])) if f]
         for c in p.get("colores", []):
-            c["foto"] = guardar(c.get("foto"), f"{base}-color-{nombre_archivo(c.get('codigo') or c['nombre'])}")
+            color = nombre_archivo(c.get("codigo") or c["nombre"])
+            c["foto"] = guardar(c.get("foto"), f"{base}-muestra-{color}")
+            c["fotoProducto"] = guardar(c.get("fotoProducto"), f"{base}-color-{color}")
 
     (salida / "catalogo.json").write_text(json.dumps(cat, ensure_ascii=False), encoding="utf-8")
     print(f"{len(cat['productos'])} artículos, {cuenta} fotos en {salida / 'fotos'}")

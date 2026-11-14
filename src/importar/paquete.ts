@@ -106,7 +106,7 @@ export async function aplicarFotos(
   for (const a of asignadas) {
     const p = nuevos.get(a.productoId)!;
     try {
-      const { dataUrl } = await normalizarFoto(porNombre.get(a.archivo)!, a.rol === 'color' ? 240 : 900);
+      const { dataUrl } = await normalizarFoto(porNombre.get(a.archivo)!, 900);
       if (a.rol === 'frente') {
         p.foto = dataUrl;
         p.avisos = p.avisos.filter((x) => !x.includes('foto'));
@@ -114,7 +114,7 @@ export async function aplicarFotos(
       else if (a.rol === 'detalle') detalles.set(p.id, [...(detalles.get(p.id) ?? []), { orden: a.orden, foto: dataUrl }]);
       else {
         const c = p.colores.find((x) => x.nombre === a.color);
-        if (c) c.foto = dataUrl;
+        if (c) c.fotoProducto = dataUrl;
       }
       ok++;
     } catch {

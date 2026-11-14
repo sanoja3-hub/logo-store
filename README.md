@@ -42,7 +42,7 @@ y se seleccionan todas a la vez con estos nombres:
 | `2800.jpg`            | Frente (la foto principal y la cara de «Foto 3D») |
 | `2800-espalda.jpg`    | Espalda (la otra cara de «Foto 3D»)             |
 | `2800-2.jpg`          | Detalle 2 (bolsillos, cierres, suela…)          |
-| `2800-color-06.jpg`   | Miniatura del color de código 06 (o de nombre «06») |
+| `2800-color-06.jpg`   | La prenda en el color de código 06 (o de nombre «06»): es la foto que se ve al elegir ese color |
 
 Cada foto reemplaza solo lo suyo (los detalles nuevos reemplazan a los anteriores). Lo que no se reconoce no se
 asigna y se lista con su motivo. «Quitar todas las fotos» deja el borrador sin fotos, con los códigos, tallas y

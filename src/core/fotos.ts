@@ -4,7 +4,7 @@
 //   2800.jpg            frente (la foto principal)
 //   2800-espalda.jpg    espalda (la otra cara de «Foto 3D»)
 //   2800-2.jpg          detalle número 2 (bolsillos, cierres, suela…)
-//   2800-color-06.jpg   miniatura del color de código 06 (o del color con ese nombre)
+//   2800-color-06.jpg   la prenda en el color de código 06 (o del color con ese nombre)
 // Lo que no se reconoce no se asigna: se informa con su motivo.
 
 import type { Catalogo, Producto } from './modelo';
@@ -151,7 +151,7 @@ export function quitarFotos(productos: Producto[]): Producto[] {
     foto: null,
     fotoEspalda: null,
     fotos: [],
-    colores: p.colores.map((c) => ({ ...c, foto: null })),
+    colores: p.colores.map((c) => ({ ...c, foto: null, fotoProducto: null })),
   }));
 }
 
@@ -169,7 +169,14 @@ export async function mapearFotos(
     fotoEspalda: await una(p.fotoEspalda, `${base}-espalda`),
     fotos: fotos.filter((f): f is string => !!f),
     colores: await Promise.all(
-      p.colores.map(async (c) => ({ ...c, foto: await una(c.foto, `${base}-color-${nombreArchivo(c.codigo || c.nombre)}`) })),
+      p.colores.map(async (c) => {
+        const nombre = nombreArchivo(c.codigo || c.nombre);
+        return {
+          ...c,
+          foto: await una(c.foto, `${base}-muestra-${nombre}`),
+          fotoProducto: await una(c.fotoProducto, `${base}-color-${nombre}`),
+        };
+      }),
     ),
   };
 }
@@ -196,7 +203,7 @@ export function contarFotos(cat: Catalogo): { total: number; incrustadas: number
   let total = 0;
   let incrustadas = 0;
   for (const p of cat.productos) {
-    for (const f of [p.foto, p.fotoEspalda, ...(p.fotos ?? []), ...p.colores.map((c) => c.foto)]) {
+    for (const f of [p.foto, p.fotoEspalda, ...(p.fotos ?? []), ...p.colores.flatMap((c) => [c.foto, c.fotoProducto])]) {
       if (!f) continue;
       total++;
       if (esDataUrl(f)) incrustadas++;

@@ -35,8 +35,10 @@ export interface ColorProducto {
   hex: string;
   /** Código del color en el catálogo del proveedor (ej. «06»). */
   codigo?: string;
-  /** Foto pequeña de la prenda en ese color, si el catálogo la trae. */
+  /** Muestra pequeña del color (la de la carta de colores del catálogo). */
   foto?: string | null;
+  /** Foto completa de la prenda en ese color: es la que se ve en «Foto 3D» al elegir el color. */
+  fotoProducto?: string | null;
 }
 
 /** Dato de la ficha técnica tal como viene en el catálogo (Tallas, Material, Características…). */
