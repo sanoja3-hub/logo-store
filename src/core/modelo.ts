@@ -148,8 +148,8 @@ export interface LogoCliente {
 }
 
 export const AJUSTES_INICIALES: Ajustes = {
-  empresa: 'Atelier Uniformes',
-  lema: 'Uniformes corporativos al mayor',
+  empresa: 'Showroom de Uniformes',
+  lema: 'Catálogo mayorista de uniformes y dotación',
   whatsappAsesor: '',
   correoAsesor: '',
   moneda: 'USD',

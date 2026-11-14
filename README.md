@@ -25,8 +25,33 @@ tallas y lo envíe al asesor por WhatsApp con una orden en PDF.
 bun install
 bun run dev     # http://localhost:3000
 bun run check   # tipos, pruebas y build
-bun run demo    # dist-demo/index.html: un solo archivo con un catálogo de ejemplo
-DEMO_CATALOGO=ruta/catalogo.json bun run demo   # la misma demo con un catálogo real
+bun run demo    # dist-demo/index.html: un solo archivo con public/catalogo.json y sus fotos adentro
+DEMO_CATALOGO=ruta/catalogo.json bun run demo   # la misma demo con otro catálogo (sus fotos/ al lado)
+```
+
+El repositorio no trae catálogo ni fotos: viven en `public/catalogo.json` y `public/fotos/`, que no se suben.
+
+## Fotos del catálogo
+
+Las fotos son archivos sueltos en `fotos/`, nombrados con el código del artículo, y `catalogo.json` solo las
+enlaza (`"foto": "fotos/2800.webp"`). Para cargar fotos nuevas: `#admin` → Revisar → «Cargar fotos por código»,
+y se seleccionan todas a la vez con estos nombres:
+
+| Archivo               | Qué es                                          |
+| --------------------- | ----------------------------------------------- |
+| `2800.jpg`            | Frente (la foto principal y la cara de «Foto 3D») |
+| `2800-espalda.jpg`    | Espalda (la otra cara de «Foto 3D»)             |
+| `2800-2.jpg`          | Detalle 2 (bolsillos, cierres, suela…)          |
+| `2800-color-06.jpg`   | Miniatura del color de código 06 (o de nombre «06») |
+
+Cada foto reemplaza solo lo suyo (los detalles nuevos reemplazan a los anteriores). Lo que no se reconoce no se
+asigna y se lista con su motivo. «Quitar todas las fotos» deja el borrador sin fotos, con los códigos, tallas y
+colores intactos, para cargar una tanda nueva desde cero.
+
+Un `catalogo.json` viejo con las fotos incrustadas se separa así:
+
+```bash
+python3 herramientas/separar_fotos.py catalogo.json public/
 ```
 
 ## Catálogo Maestro Showroom (PDF de Kavak, gorras y correas)
@@ -39,13 +64,15 @@ pip install pymupdf pillow
 python3 herramientas/extraer_catalogo_pdf.py Catalogo_Maestro_Showroom_Optimizado.pdf catalogo.json
 ```
 
-Luego, en `#admin` → Publicar → «Abrir un catalogo.json» para revisarlo, o se coloca directo en `public/`.
+Luego, en `#admin` → Publicar → «Abrir un catálogo (.zip o .json)» para revisarlo, o se separan sus fotos con
+`herramientas/separar_fotos.py` directo en `public/`.
 Las cartas de colores de Lanitex (sin códigos de artículo) y los bolsos (sin código) no se importan.
 
 ## Publicar el catálogo
 
 1. En `#admin`: Importar → Revisar → Ajustes (nombre, WhatsApp del asesor, moneda) → Publicar.
-2. «Descargar catalogo.json» y colocarlo en `public/` (o junto al `index.html` ya publicado).
+2. «Descargar catalogo.zip» y descomprimirlo en `public/` (o junto al `index.html` ya publicado): trae
+   `catalogo.json` y la carpeta `fotos/`.
 3. `bun run build` y subir `dist/` a cualquier hosting estático (Netlify, Vercel, GitHub Pages, Firebase Hosting).
 
 ## Límites conocidos

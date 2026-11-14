@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Download, Eye, FileUp, Plus, Trash2, Upload } from 'lucide-react';
-import { almacen, cargarCatalogoPublico, catalogoVacio, esCatalogo } from '../core/almacen';
+import { AlertTriangle, ArrowLeft, Download, Eye, FileUp, ImagePlus, ImageOff, Plus, Trash2, Upload } from 'lucide-react';
+import { almacen, cargarCatalogoPublico, catalogoVacio } from '../core/almacen';
+import { contarFotos, quitarFotos, type FotoSinAsignar } from '../core/fotos';
 import { aCentavos, formatoDinero } from '../core/dinero';
 import { leerTallas } from '../core/interpretar';
 import { FORMAS_3D, nuevoId, type Ajustes, type Catalogo, type Forma3D, type Producto } from '../core/modelo';
 import { categoriaDe } from '../importar/armar';
 import { normalizarFoto } from '../importar/imagenes';
+import { abrirPaquete, aplicarFotos, armarPaquete } from '../importar/paquete';
 import type { ResultadoImportacion } from '../importar/tipos';
 import { descargar } from '../pedido/documentos';
 import { ir } from '../ruta';
@@ -237,6 +239,23 @@ function Importar({ cantidadActual, onImportado }: { cantidadActual: number; onI
 function Revisar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | null) => Catalogo | null) => void }) {
   const [soloAvisos, setSoloAvisos] = useState(false);
   const [filtro, setFiltro] = useState('');
+  const entradaFotos = useRef<HTMLInputElement>(null);
+  const [cargaFotos, setCargaFotos] = useState<{ hechas: number; total: number } | null>(null);
+  const [resultadoFotos, setResultadoFotos] = useState<{ asignadas: number; sinAsignar: FotoSinAsignar[] } | null>(null);
+  const fotos = useMemo(() => contarFotos(cat), [cat]);
+
+  const cargarFotos = async (lista: FileList | null) => {
+    if (!lista?.length) return;
+    setResultadoFotos(null);
+    setCargaFotos({ hechas: 0, total: lista.length });
+    try {
+      const r = await aplicarFotos(cat.productos, [...lista], (hechas, total) => setCargaFotos({ hechas, total }));
+      setCat((c) => c && { ...c, productos: r.productos });
+      setResultadoFotos({ asignadas: r.asignadas, sinAsignar: r.sinAsignar });
+    } finally {
+      setCargaFotos(null);
+    }
+  };
   const lista = useMemo(
     () =>
       cat.productos.filter(
@@ -264,7 +283,34 @@ function Revisar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | nu
           <input type="checkbox" checked={soloAvisos} onChange={(e) => setSoloAvisos(e.target.checked)} className="accent-tinta-900" />
           Solo los que tienen avisos
         </label>
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Boton variante="secundario" tamano="sm" disabled={!!cargaFotos} onClick={() => entradaFotos.current?.click()}>
+            <ImagePlus className="h-4 w-4" /> {cargaFotos ? `Cargando fotos ${cargaFotos.hechas}/${cargaFotos.total}…` : 'Cargar fotos por código'}
+          </Boton>
+          <input
+            ref={entradaFotos}
+            type="file"
+            accept="image/*"
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              void cargarFotos(e.target.files);
+              e.target.value = '';
+            }}
+          />
+          <Boton
+            variante="peligro"
+            tamano="sm"
+            disabled={fotos.total === 0 || !!cargaFotos}
+            onClick={() => {
+              if (confirm(`¿Quitar las ${fotos.total} fotos del borrador? Los códigos, nombres, tallas y colores se conservan.`)) {
+                setCat((c) => c && { ...c, productos: quitarFotos(c.productos) });
+                setResultadoFotos(null);
+              }
+            }}
+          >
+            <ImageOff className="h-4 w-4" /> Quitar todas las fotos
+          </Boton>
           <Boton
             variante="secundario"
             tamano="sm"
@@ -299,6 +345,28 @@ function Revisar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | nu
           </Boton>
         </div>
       </div>
+      <p className="mb-4 text-xs text-tinta-500">
+        Fotos nuevas: nómbralas con el código del artículo, por ejemplo <span className="font-mono">2800.jpg</span> (frente),{' '}
+        <span className="font-mono">2800-espalda.jpg</span>, <span className="font-mono">2800-2.jpg</span> (detalles) y{' '}
+        <span className="font-mono">2800-color-06.jpg</span> (miniatura del color 06). Puedes seleccionarlas todas a la vez.
+      </p>
+      {resultadoFotos && (
+        <div className="mb-4">
+          <Aviso tono={resultadoFotos.sinAsignar.length ? 'aviso' : 'ok'}>
+            {resultadoFotos.asignadas} fotos asignadas
+            {resultadoFotos.sinAsignar.length > 0 && ` · ${resultadoFotos.sinAsignar.length} sin asignar:`}
+            {resultadoFotos.sinAsignar.length > 0 && (
+              <ul className="mt-1 list-disc pl-5">
+                {resultadoFotos.sinAsignar.map((x, i) => (
+                  <li key={i}>
+                    <span className="font-mono">{x.archivo}</span>: {x.motivo}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Aviso>
+        </div>
+      )}
       <div className="space-y-3">
         {lista.map((p) => (
           <FichaEditable
@@ -501,6 +569,7 @@ function Publicar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | n
   const sinCodigo = cat.productos.filter((p) => !p.codigo).length;
   const sinFoto = cat.productos.filter((p) => !p.foto).length;
   const pesoMb = useMemo(() => new Blob([JSON.stringify(cat)]).size / 1024 / 1024, [cat]);
+  const [armando, setArmando] = useState(false);
 
   const publicado = (): Catalogo => ({
     ...cat,
@@ -543,31 +612,44 @@ function Publicar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | n
         <div className="rounded-2xl bg-white p-6 ring-1 ring-tinta-200">
           <div className="text-base font-semibold">Publicar para los clientes</div>
           <p className="mt-1 text-sm text-tinta-600">
-            Descarga <span className="font-mono">catalogo.json</span> ({pesoMb.toFixed(1)} MB) y súbelo a la carpeta <span className="font-mono">public/</span> del sitio
-            (o junto al <span className="font-mono">index.html</span> publicado). Todos los clientes verán ese catálogo.
+            Descarga <span className="font-mono">catalogo.zip</span> (unos {pesoMb.toFixed(1)} MB) y descomprímelo en la carpeta{' '}
+            <span className="font-mono">public/</span> del sitio (o junto al <span className="font-mono">index.html</span> publicado): trae{' '}
+            <span className="font-mono">catalogo.json</span> y la carpeta <span className="font-mono">fotos/</span>, con cada foto nombrada por su código.
+            Todos los clientes verán ese catálogo.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Boton onClick={() => descargar(new Blob([JSON.stringify(publicado())], { type: 'application/json' }), 'catalogo.json')}>
-              <Download className="h-4 w-4" /> Descargar catalogo.json
+            <Boton
+              disabled={armando}
+              onClick={async () => {
+                setArmando(true);
+                try {
+                  const { zip, avisos } = await armarPaquete(publicado());
+                  descargar(zip, 'catalogo.zip');
+                  setHecho(avisos.length ? avisos.join(' ') : 'Listo: se descargó catalogo.zip.');
+                } finally {
+                  setArmando(false);
+                }
+              }}
+            >
+              <Download className="h-4 w-4" /> {armando ? 'Preparando…' : 'Descargar catalogo.zip'}
             </Boton>
             <Boton variante="secundario" onClick={() => entrada.current?.click()}>
-              <Upload className="h-4 w-4" /> Abrir un catalogo.json
+              <Upload className="h-4 w-4" /> Abrir un catálogo (.zip o .json)
             </Boton>
             <input
               ref={entrada}
               type="file"
-              accept="application/json,.json"
+              accept="application/json,.json,application/zip,.zip"
               className="hidden"
               onChange={async (e) => {
                 const f = e.target.files?.[0];
                 if (!f) return;
                 try {
-                  const j = JSON.parse(await f.text());
-                  if (!esCatalogo(j)) throw new Error();
-                  setCat(() => j);
-                  setHecho(`Se abrió «${f.name}» con ${j.productos.length} artículos.`);
-                } catch {
-                  setHecho('Ese archivo no es un catálogo válido.');
+                  const { catalogo, avisos } = await abrirPaquete(f);
+                  setCat(() => catalogo);
+                  setHecho([`Se abrió «${f.name}» con ${catalogo.productos.length} artículos.`, ...avisos].join(' '));
+                } catch (err) {
+                  setHecho((err as Error).message || 'Ese archivo no es un catálogo válido.');
                 }
                 e.target.value = '';
               }}
