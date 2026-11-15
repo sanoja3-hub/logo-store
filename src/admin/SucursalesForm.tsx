@@ -24,7 +24,7 @@ export function SucursalesForm({ sucursales, onCambio }: { sucursales: Sucursal[
       <div className="rounded-2xl bg-white p-5 text-sm text-tinta-600 ring-1 ring-tinta-200">
         Cada vendedor tiene su enlace del catálogo: el cliente que entra por ese enlace le envía el pedido directo a su WhatsApp. Si el
         cliente entra por el enlace general, elige la sucursal y el vendedor al enviar. Las sucursales comparten el mismo catálogo, los
-        precios y el stock que se publican desde aquí.
+        precios que se publican desde aquí.
       </div>
       {sucursales.map((s) => (
         <section key={s.id} className="rounded-2xl bg-white p-5 ring-1 ring-tinta-200">

@@ -304,13 +304,3 @@ export function cotizar(l: LineaCotizable, r: Reglas, unidadesPedido?: number): 
   };
 }
 
-/** Cantidades que superan el stock, por talla. Un stock no indicado no limita. */
-export function excesosDeStock(cantidades: Record<string, number>, stock: Record<string, number> | undefined): Record<string, number> {
-  const fuera: Record<string, number> = {};
-  if (!stock) return fuera;
-  for (const [t, n] of Object.entries(cantidades)) {
-    const hay = stock[t];
-    if (hay !== undefined && n > hay) fuera[t] = hay;
-  }
-  return fuera;
-}

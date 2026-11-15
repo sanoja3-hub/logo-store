@@ -66,8 +66,6 @@ export interface Producto {
   preciosGrandes?: Partial<PreciosNivel>;
   /** Tipo de tela (de la lista de telas de las reglas): decide qué técnicas se pueden aplicar. */
   tela?: string;
-  /** Unidades disponibles por talla. Una talla sin dato no se limita. */
-  stock?: Record<string, number>;
   /** Unidades mínimas por pedido de este artículo (0 = sin mínimo). */
   minimo: number;
   /** Foto del artículo (data URL webp/jpeg) o null si no se pudo leer. Es el frente en la vista «Foto 3D». */
@@ -107,7 +105,7 @@ export interface Ajustes {
   mostrarPrecios: boolean;
   /** PIN del panel (solo para que no entre cualquiera desde el catálogo: no es seguridad real). */
   pin?: string;
-  /** Muestra el aviso de que los precios y el stock son de prueba. */
+  /** Muestra el aviso de que los precios y las telas son de prueba. */
   datosDePrueba?: boolean;
   /** Imagen de portada de la empresa, arriba del catálogo (data URL o `fotos/portada.jpg`). */
   portada?: string | null;

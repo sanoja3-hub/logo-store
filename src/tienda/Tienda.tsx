@@ -195,7 +195,7 @@ export function Tienda() {
 
         {ajustes.datosDePrueba && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            Versión de prueba: los precios y el stock son de ejemplo.
+            Versión de prueba: los precios y las telas son de ejemplo.
           </div>
         )}
         {atencion.vendedor && (
@@ -255,7 +255,7 @@ export function Tienda() {
                   className="foco group flex flex-col overflow-hidden rounded-xl bg-white text-left ring-1 ring-tinta-200/80 transition hover:shadow-lg hover:ring-tinta-300"
                 >
                   <div className="relative aspect-square overflow-hidden bg-white">
-                    <Foto src={p.foto} alt={p.nombre} className="absolute inset-0 h-full w-full p-3 transition-transform duration-300 group-hover:scale-[1.03]" />
+                    <Foto src={p.colores.find((c) => c.fotoProducto)?.fotoProducto ?? p.foto} alt={p.nombre} className="absolute inset-0 h-full w-full p-3 transition-transform duration-300 group-hover:scale-[1.03]" />
                     {enPedido && (
                       <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-md bg-emerald-600 px-1.5 py-0.5 text-[10px] font-semibold text-white">
                         <Check className="h-3 w-3" /> En el pedido
@@ -268,7 +268,6 @@ export function Tienda() {
                   <div className="flex flex-1 flex-col gap-1 border-t border-tinta-100 p-3">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-mono text-[11px] text-tinta-500">{p.codigo || 'Sin código'}</span>
-                      {agotadoDe(p) && <span className="rounded bg-red-50 px-1.5 text-[10px] font-medium text-red-700">Agotado</span>}
                     </div>
                     <div className="line-clamp-2 text-sm font-medium leading-snug text-tinta-900">{p.nombre || 'Artículo sin nombre'}</div>
                     {p.tela && <div className="text-[11px] text-tinta-500">{p.tela}</div>}
@@ -375,7 +374,6 @@ export function Tienda() {
 
 const CLAVE_VENDEDOR = 'atelier:vendedor';
 
-const agotadoDe = (p: Producto) => !!p.stock && p.tallas.length > 0 && p.tallas.every((t) => (p.stock?.[t] ?? 1) <= 0);
 
 /** Pedidos guardados por una versión anterior (un solo logo, un solo precio) pasan al formato nuevo. */
 function normalizarLinea(l: LineaPedido): LineaPedido {

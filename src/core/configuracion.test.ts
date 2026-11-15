@@ -29,7 +29,7 @@ const catalogo = (productos: Producto[]): Catalogo => ({
 
 describe('configuración exportable', () => {
   it('exporta sin fotos y la vuelve a aplicar por código', () => {
-    const origen = catalogo([producto('2801', { precios: { detal: 2800, mayor: 2200, distribuidor: 1800 }, stock: { M: 10 }, tela: 'Poliéster' })]);
+    const origen = catalogo([producto('2801', { precios: { detal: 2800, mayor: 2200, distribuidor: 1800 }, tela: 'Poliéster' })]);
     origen.reglas = { ...REGLAS_INICIALES, niveles: { mayorDesde: 6, distribuidorDesde: 60 } };
     origen.sucursales = [{ id: 's1', nombre: 'Centro', vendedores: [{ id: 'v1', nombre: 'Ana', whatsapp: '584141234567' }] }];
     const conf = JSON.parse(JSON.stringify(exportarConfiguracion(origen)));
@@ -41,7 +41,7 @@ describe('configuración exportable', () => {
     expect(r.actualizados).toBe(1);
     expect(r.sinArticulo).toEqual(['9999']);
     const p = r.catalogo.productos[0];
-    expect(p).toMatchObject({ precios: { detal: 2800 }, stock: { M: 10 }, tela: 'Poliéster', foto: 'fotos/x.webp' });
+    expect(p).toMatchObject({ precios: { detal: 2800 }, tela: 'Poliéster', foto: 'fotos/x.webp' });
     expect(r.catalogo.productos[1].precios).toBeUndefined();
     expect(r.catalogo.reglas?.niveles.mayorDesde).toBe(6);
     expect(r.catalogo.sucursales?.[0].vendedores[0].nombre).toBe('Ana');

@@ -644,28 +644,6 @@ function FichaEditable({
                 </>
               )}
             </div>
-            <div>
-              <span className="mb-1 block text-xs font-medium text-tinta-600">Stock por talla (vacío = sin control)</span>
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2">
-                {p.tallas.map((t) => (
-                  <label key={t} className="block">
-                    <span className="mb-0.5 block text-center text-[11px] text-tinta-500">{t}</span>
-                    <input
-                      type="number"
-                      min={0}
-                      value={p.stock?.[t] ?? ''}
-                      onChange={(e) => {
-                        const st = { ...(p.stock ?? {}) };
-                        if (e.target.value === '') delete st[t];
-                        else st[t] = Math.max(0, Math.floor(Number(e.target.value) || 0));
-                        onCambio({ stock: Object.keys(st).length ? st : undefined });
-                      }}
-                      className="foco h-9 w-full rounded-lg border border-tinta-200 bg-white px-1 text-center text-sm tabular-nums"
-                    />
-                  </label>
-                ))}
-              </div>
-            </div>
           </div>
           <div className="flex justify-end">
             <Boton variante="peligro" tamano="sm" onClick={onBorrar}>
@@ -727,7 +705,7 @@ function AjustesForm({ ajustes, onCambio }: { ajustes: Ajustes; onCambio: (a: Aj
         />
         <label className="flex items-center gap-2 pt-6 text-sm">
           <input type="checkbox" checked={!!ajustes.datosDePrueba} onChange={(e) => set('datosDePrueba', e.target.checked)} className="h-4 w-4 accent-tinta-900" />
-          Avisar a los clientes que los precios y el stock son de prueba
+          Avisar a los clientes que los precios y las telas son de prueba
         </label>
       </div>
       <Campo etiqueta="Correo del asesor (opcional)" type="email" value={ajustes.correoAsesor} onChange={(e) => set('correoAsesor', e.target.value)} />
@@ -825,7 +803,7 @@ function Publicar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | n
               onClick={() => {
                 const conf = exportarConfiguracion(cat);
                 descargar(new Blob([JSON.stringify(conf, null, 2)], { type: 'application/json' }), `configuracion-${conf.exportadoEn.slice(0, 10)}.json`);
-                setHecho('Se descargó la configuración: reglas, sucursales, precios, telas y stock (sin fotos).');
+                setHecho('Se descargó la configuración: reglas, sucursales, precios y telas (sin fotos).');
               }}
             >
               <Settings2 className="h-4 w-4" /> Exportar configuración (JSON)

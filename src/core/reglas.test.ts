@@ -3,7 +3,6 @@ import {
   REGLAS_INICIALES,
   cotizar,
   escalaPorCantidad,
-  excesosDeStock,
   nivelPorCantidad,
   precioTalla,
   tamanosPermitidos,
@@ -118,12 +117,5 @@ describe('personalización', () => {
     expect(c.errores[0]).toContain('no se puede aplicar en Algodón 100%');
     expect(c.errores[1]).toContain('no permitido en manga derecha');
     expect(c.errores[2]).toContain('exige mínimo 12 unidades');
-  });
-});
-
-describe('stock', () => {
-  it('marca las tallas que superan el stock', () => {
-    expect(excesosDeStock({ S: 3, M: 10, L: 1 }, { S: 5, M: 4 })).toEqual({ M: 4 });
-    expect(excesosDeStock({ S: 3 }, undefined)).toEqual({});
   });
 });

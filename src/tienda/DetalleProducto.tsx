@@ -57,7 +57,7 @@ export function DetalleProducto({
   onGuardar: (l: LineaPedido, editando: boolean) => void;
 }) {
   const colores = p.colores.length ? p.colores : [COLOR_NEUTRO];
-  const [color, setColor] = useState<ColorProducto>(lineaInicial?.color ?? colores[0]);
+  const [color, setColor] = useState<ColorProducto>(lineaInicial?.color ?? colores.find((c) => c.fotoProducto) ?? colores[0]);
   const [cantidades, setCantidades] = useState<Record<string, number>>(
     () => lineaInicial?.cantidades ?? Object.fromEntries(p.tallas.map((t) => [t, 0])),
   );
@@ -108,14 +108,11 @@ export function DetalleProducto({
     [activas, logo],
   );
   const bajoMinimo = p.minimo > 0 && unidades > 0 && unidades < p.minimo;
-  const conStock = (t: string) => p.stock?.[t];
-  const agotado = p.stock ? p.tallas.every((t) => (p.stock?.[t] ?? 1) <= 0) : false;
   const sinPrecio = precios.detal === null && precios.mayor === null && precios.distribuidor === null;
   const $ = (c: number | null) => (c === null ? 'Por confirmar' : formatoDinero(c, ajustes.moneda));
 
   const cambiar = (talla: string, valor: number) => {
-    const max = conStock(talla) ?? 99999;
-    setCantidades((c) => ({ ...c, [talla]: Math.max(0, Math.min(max, Math.round(valor) || 0)) }));
+    setCantidades((c) => ({ ...c, [talla]: Math.max(0, Math.min(99999, Math.round(valor) || 0)) }));
   };
 
   const nuevaPersonalizacion = (): Personalizacion | null => {
@@ -427,16 +424,12 @@ export function DetalleProducto({
                   </button>
                 )}
               </div>
-              {agotado && <div className="mb-2"><Aviso tono="aviso">Este artículo está agotado por ahora.</Aviso></div>}
               <div className="grid grid-cols-[repeat(auto-fill,minmax(92px,1fr))] gap-2">
                 {p.tallas.map((t) => {
-                  const hay = conStock(t);
-                  const sinStock = hay !== undefined && hay <= 0;
-                  const lleno = hay !== undefined && (cantidades[t] || 0) >= hay;
                   return (
                     <div
                       key={t}
-                      className={`rounded-lg border p-2 ${sinStock ? 'border-tinta-100 bg-tinta-50 opacity-60' : cantidades[t] > 0 ? 'border-tinta-900 bg-tinta-50' : 'border-tinta-200'}`}
+                      className={`rounded-lg border p-2 ${cantidades[t] > 0 ? 'border-tinta-900 bg-tinta-50' : 'border-tinta-200'}`}
                     >
                       <div className="mb-1 flex items-baseline justify-between gap-1">
                         <span className="text-xs font-semibold text-tinta-700">{t}</span>
@@ -445,7 +438,6 @@ export function DetalleProducto({
                       <div className="flex items-center justify-between gap-1">
                         <button
                           onClick={() => cambiar(t, (cantidades[t] || 0) - 1)}
-                          disabled={sinStock}
                           className="foco grid h-7 w-7 shrink-0 place-items-center rounded-md text-tinta-500 hover:bg-tinta-100 disabled:opacity-40"
                           aria-label={`Menos ${t}`}
                         >
@@ -455,8 +447,6 @@ export function DetalleProducto({
                           type="number"
                           inputMode="numeric"
                           min={0}
-                          max={hay}
-                          disabled={sinStock}
                           value={cantidades[t] || ''}
                           placeholder="0"
                           onChange={(e) => cambiar(t, Number(e.target.value))}
@@ -465,15 +455,11 @@ export function DetalleProducto({
                         />
                         <button
                           onClick={() => cambiar(t, (cantidades[t] || 0) + 1)}
-                          disabled={sinStock || lleno}
                           className="foco grid h-7 w-7 shrink-0 place-items-center rounded-md text-tinta-500 hover:bg-tinta-100 disabled:opacity-40"
                           aria-label={`Más ${t}`}
                         >
                           <Plus className="h-3.5 w-3.5" />
                         </button>
-                      </div>
-                      <div className={`mt-1 text-center text-[10px] ${sinStock ? 'font-medium text-red-700' : lleno ? 'font-medium text-amber-700' : 'text-tinta-500'}`}>
-                        {hay === undefined ? 'Consultar stock' : sinStock ? 'Agotado' : lleno ? `Máx. ${hay}` : `Stock: ${hay}`}
                       </div>
                     </div>
                   );

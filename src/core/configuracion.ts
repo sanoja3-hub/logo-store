@@ -1,10 +1,10 @@
 // Configuración del negocio en un JSON liviano (sin fotos): reglas, ajustes, sucursales y, por artículo, sus
-// precios, tela y stock. Sirve para actualizar precios y stock de la app publicada cargando un solo archivo.
+// precios y tela. Sirve para actualizar los precios de la app publicada cargando un solo archivo.
 
 import type { Ajustes, Catalogo, Producto, Sucursal } from './modelo';
 import { reglasCompletas, type Reglas } from './reglas';
 
-type DatosArticulo = Pick<Producto, 'precios' | 'preciosGrandes' | 'tela' | 'stock' | 'minimo'> & { codigo: string };
+type DatosArticulo = Pick<Producto, 'precios' | 'preciosGrandes' | 'tela' | 'minimo'> & { codigo: string };
 
 export interface Configuracion {
   tipo: 'configuracion-showroom';
@@ -27,7 +27,7 @@ export function exportarConfiguracion(cat: Catalogo, ahora = new Date()): Config
     sucursales: cat.sucursales ?? [],
     articulos: cat.productos
       .filter((p) => p.codigo)
-      .map((p) => ({ codigo: p.codigo, precios: p.precios, preciosGrandes: p.preciosGrandes, tela: p.tela, stock: p.stock, minimo: p.minimo })),
+      .map((p) => ({ codigo: p.codigo, precios: p.precios, preciosGrandes: p.preciosGrandes, tela: p.tela, minimo: p.minimo })),
   };
 }
 
@@ -37,8 +37,7 @@ export function esConfiguracion(x: unknown): x is Configuracion {
 }
 
 /**
- * Aplica una configuración al catálogo: reemplaza reglas, ajustes y sucursales, y actualiza precios, tela y
- * stock de los artículos por su código. Los códigos que no están en el catálogo se informan, no se crean.
+ * Aplica una configuración al catálogo: reemplaza reglas, ajustes y sucursales, y actualiza precios, tela de los artículos por su código. Los códigos que no están en el catálogo se informan, no se crean.
  */
 export function aplicarConfiguracion(cat: Catalogo, c: Configuracion): { catalogo: Catalogo; actualizados: number; sinArticulo: string[] } {
   const porCodigo = new Map(c.articulos.map((a) => [a.codigo.trim().toUpperCase(), a]));
@@ -48,7 +47,7 @@ export function aplicarConfiguracion(cat: Catalogo, c: Configuracion): { catalog
     if (!a) return p;
     porCodigo.delete(p.codigo.trim().toUpperCase());
     actualizados++;
-    return { ...p, precios: a.precios, preciosGrandes: a.preciosGrandes, tela: a.tela, stock: a.stock, minimo: a.minimo ?? p.minimo };
+    return { ...p, precios: a.precios, preciosGrandes: a.preciosGrandes, tela: a.tela, minimo: a.minimo ?? p.minimo };
   });
   return {
     catalogo: {
