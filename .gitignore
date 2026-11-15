@@ -3,3 +3,7 @@ dist
 dist-demo
 *.log
 .env*
+# El catálogo y sus fotos se publican aparte: nunca van al repositorio.
+public/catalogo.json
+public/fotos/
+catalogo.zip

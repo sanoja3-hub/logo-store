@@ -1,9 +1,20 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from 'react';
-import { CheckCircle2, FileSpreadsheet, FileText, ImagePlus, Pencil, Send, Trash2 } from 'lucide-react';
+import { CheckCircle2, FileDown, FileSpreadsheet, FileText, ImagePlus, Pencil, Send, Trash2 } from 'lucide-react';
 import { formatoDinero } from '../core/dinero';
-import { totalUnidades, type Ajustes, type Cliente, type LineaPedido, type LogoCliente } from '../core/modelo';
+import type { Ajustes, Cliente, LineaPedido, LogoCliente, Sucursal, Vendedor } from '../core/modelo';
+import type { Reglas } from '../core/reglas';
 import { descargar, nombreArchivo, ordenExcel, ordenPdf, type DatosOrden } from '../pedido/documentos';
-import { detalleTallas, enlaceWhatsApp, faltantesCliente, mensajeWhatsApp, numeroOrden, subtotal, textoLogo, totales } from '../pedido/orden';
+import {
+  cotizarPedido,
+  csvPedido,
+  detalleTallas,
+  enlaceWhatsApp,
+  etiquetaNivel,
+  faltantesCliente,
+  mensajeWhatsApp,
+  numeroOrden,
+  textoPersonalizacion,
+} from '../pedido/orden';
 import { AreaTexto, Aviso, Boton, Campo, Foto, PanelLateral } from '../ui/comunes';
 import { leerLogo } from './logo';
 
@@ -17,6 +28,10 @@ export function PanelPedido({
   logo,
   setLogo,
   ajustes,
+  reglas,
+  sucursales,
+  atencion,
+  setAtencion,
   onEditar,
 }: {
   abierto: boolean;
@@ -28,6 +43,10 @@ export function PanelPedido({
   logo: LogoCliente | null;
   setLogo: (l: LogoCliente | null) => void;
   ajustes: Ajustes;
+  reglas: Reglas;
+  sucursales: Sucursal[];
+  atencion: { sucursal: Sucursal | null; vendedor: Vendedor | null };
+  setAtencion: (a: { sucursal: Sucursal | null; vendedor: Vendedor | null }) => void;
   onEditar: (l: LineaPedido) => void;
 }) {
   const [ocupado, setOcupado] = useState<string | null>(null);
@@ -36,14 +55,20 @@ export function PanelPedido({
   const [enviada, setEnviada] = useState<{ numero: string; compartido: boolean } | null>(null);
   const [intentoEnviar, setIntentoEnviar] = useState(false);
   const entradaLogo = useRef<HTMLInputElement>(null);
-  const t = totales(lineas);
-  const faltan = faltantesCliente(cliente);
+  const t = cotizarPedido(lineas, reglas);
+  const $ = (c: number | null) => (c === null ? 'Por confirmar' : formatoDinero(c, ajustes.moneda));
+  const numeroDestino = atencion.vendedor?.whatsapp || ajustes.whatsappAsesor;
+  const vendedores = sucursales.flatMap((s) => s.vendedores.map((v) => ({ s, v })));
+  const faltan = [
+    ...faltantesCliente(cliente),
+    ...(vendedores.length && !atencion.vendedor ? ['quién te atiende'] : []),
+  ];
   const campo = (k: keyof Cliente) => ({
     value: cliente[k],
     onChange: (e: { target: { value: string } }) => setCliente((c) => ({ ...c, [k]: e.target.value })),
   });
 
-  const datos = (numero: string): DatosOrden => ({ numero, fecha: new Date(), lineas, cliente, logo, ajustes });
+  const datos = (numero: string): DatosOrden => ({ numero, fecha: new Date(), lineas, cliente, logo, ajustes, reglas, atencion });
 
   const conOcupado = async (que: string, fn: () => Promise<void>) => {
     setOcupado(que);
@@ -65,10 +90,14 @@ export function PanelPedido({
         setError(`Completa: ${faltan.join(', ')}.`);
         return;
       }
+      if (t.errores.length) {
+        setError(`Revisa el pedido: ${t.errores[0]}`);
+        return;
+      }
       const numero = numeroOrden();
       const d = datos(numero);
       const pdf = await ordenPdf(d);
-      const texto = mensajeWhatsApp(numero, lineas, cliente, logo, ajustes);
+      const texto = mensajeWhatsApp(numero, lineas, cliente, logo, ajustes, reglas, atencion);
       const archivos = [new File([pdf], nombreArchivo(d, 'pdf'), { type: 'application/pdf' })];
       if (logo) {
         const b = await (await fetch(logo.dataUrl)).blob();
@@ -87,7 +116,7 @@ export function PanelPedido({
         }
       }
       descargar(pdf, nombreArchivo(d, 'pdf'));
-      window.open(enlaceWhatsApp(ajustes.whatsappAsesor, texto), '_blank', 'noopener');
+      window.open(enlaceWhatsApp(numeroDestino, texto), '_blank', 'noopener');
       setEnviada({ numero, compartido: false });
     });
 
@@ -114,7 +143,7 @@ export function PanelPedido({
           <p className="mx-auto mt-2 max-w-sm text-sm text-tinta-600">
             {enviada.compartido
               ? 'Compartiste la orden en PDF y tu logo. Tu asesor la revisará y te contactará para confirmar.'
-              : 'Se descargó la orden en PDF y se abrió WhatsApp con el resumen. Adjunta el PDF en el chat con tu asesor para que tenga las fotos, tallas y tu logo.'}
+              : 'Se descargó la orden en PDF y se abrió WhatsApp con el pedido. Adjunta en el chat el PDF y el archivo de tu logo.'}
           </p>
           <div className="mt-6 flex flex-col items-center gap-2">
             <Boton
@@ -159,7 +188,7 @@ export function PanelPedido({
               </div>
               {ajustes.mostrarPrecios && t.montoCentavos > 0 && (
                 <div className="text-right">
-                  <div className="text-xl font-semibold">{formatoDinero(t.montoCentavos, ajustes.moneda)}</div>
+                  <div className="text-xl font-semibold">{$(t.montoCentavos)}</div>
                   <div className="text-[11px] text-tinta-500">{t.completo ? 'Referencial, sin impuestos' : 'Sin incluir artículos sin precio'}</div>
                 </div>
               )}
@@ -167,9 +196,19 @@ export function PanelPedido({
             {error && <Aviso tono="error">{error}</Aviso>}
             <Boton variante="exito" tamano="lg" className="w-full" onClick={enviar} disabled={!!ocupado}>
               <Send className="h-4 w-4" />
-              {ocupado === 'enviar' ? 'Preparando la orden…' : 'Enviar orden al asesor por WhatsApp'}
+              {ocupado === 'enviar' ? 'Preparando la orden…' : 'Enviar pedido por WhatsApp'}
             </Boton>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
+              <Boton
+                variante="secundario"
+                disabled={!!ocupado}
+                onClick={() => {
+                  const d = datos(numeroOrden());
+                  descargar(new Blob([csvPedido(d.numero, lineas, cliente, ajustes, reglas)], { type: 'text/csv;charset=utf-8' }), nombreArchivo(d, 'csv'));
+                }}
+              >
+                <FileDown className="h-4 w-4" /> CSV
+              </Boton>
               <Boton
                 variante="secundario"
                 disabled={!!ocupado}
@@ -180,7 +219,7 @@ export function PanelPedido({
                   })
                 }
               >
-                <FileText className="h-4 w-4" /> {ocupado === 'pdf' ? 'Generando…' : 'Orden en PDF'}
+                <FileText className="h-4 w-4" /> {ocupado === 'pdf' ? '…' : 'PDF'}
               </Boton>
               <Boton
                 variante="secundario"
@@ -192,7 +231,7 @@ export function PanelPedido({
                   })
                 }
               >
-                <FileSpreadsheet className="h-4 w-4" /> {ocupado === 'xlsx' ? 'Generando…' : 'Orden en Excel'}
+                <FileSpreadsheet className="h-4 w-4" /> {ocupado === 'xlsx' ? '…' : 'Excel'}
               </Boton>
             </div>
           </div>
@@ -213,7 +252,7 @@ export function PanelPedido({
             <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-tinta-500">Artículos</h3>
             <ul className="space-y-3">
               {lineas.map((l) => {
-                const st = subtotal(l);
+                const c = t.lineas.get(l.id)!;
                 return (
                   <li key={l.id} className="flex gap-3 rounded-xl border border-tinta-200 p-3">
                     <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-tinta-50">
@@ -245,12 +284,32 @@ export function PanelPedido({
                             {l.color.nombre}
                           </span>
                         )}
-                        {textoLogo(l)}
                       </div>
-                      <div className="mt-1 text-xs text-tinta-500">{detalleTallas(l)}</div>
-                      <div className="mt-1.5 flex justify-between text-sm">
-                        <span className="font-medium">{totalUnidades(l)} uds</span>
-                        {ajustes.mostrarPrecios && st !== null && <span className="font-semibold">{formatoDinero(st, ajustes.moneda)}</span>}
+                      <div className="mt-1 font-mono text-xs text-tinta-700">{detalleTallas(l)}</div>
+                      <dl className="mt-1.5 space-y-0.5 text-xs text-tinta-600">
+                        <div className="flex justify-between gap-2">
+                          <dt>
+                            Prenda · precio {etiquetaNivel(c.nivel).toLowerCase()}
+                            {ajustes.mostrarPrecios &&
+                              ` (${[...new Set(c.tallas.map((x) => x.precioUnitario))].map((x) => $(x)).join(' / ')} c/u)`}
+                          </dt>
+                          {ajustes.mostrarPrecios && <dd className="shrink-0">{$(c.prendaSubtotal)}</dd>}
+                        </div>
+                        {c.personalizaciones.map((x) => (
+                          <div key={x.id} className={`flex justify-between gap-2 ${x.error ? 'text-amber-800' : ''}`}>
+                            <dt>
+                              + {textoPersonalizacion(x)}
+                              {x.error
+                                ? ` · ${x.error}`
+                                : ajustes.mostrarPrecios && ` (${$(x.precioUnitario)} c/u${x.descuento ? `, -${x.descuento} %` : ''})`}
+                            </dt>
+                            {ajustes.mostrarPrecios && !x.error && <dd className="shrink-0">{$(x.subtotal)}</dd>}
+                          </div>
+                        ))}
+                      </dl>
+                      <div className="mt-1.5 flex justify-between border-t border-tinta-100 pt-1.5 text-sm">
+                        <span className="font-medium">{c.unidades} uds</span>
+                        {ajustes.mostrarPrecios && <span className="font-semibold">{$(c.subtotal)}</span>}
                       </div>
                     </div>
                   </li>
@@ -264,7 +323,7 @@ export function PanelPedido({
             <input
               ref={entradaLogo}
               type="file"
-              accept="image/png,image/jpeg"
+              accept="image/png,image/jpeg,application/pdf"
               className="hidden"
               onChange={(e) => {
                 void subirLogo(e.target.files?.[0]);
@@ -296,7 +355,7 @@ export function PanelPedido({
               >
                 <ImagePlus className="h-5 w-5 text-tinta-500" />
                 <span className="text-sm">
-                  <span className="font-medium">Subir logo en PNG</span>
+                  <span className="font-medium">Subir logo (PNG, JPG o PDF)</span>
                   <span className="block text-xs text-tinta-500">Con fondo transparente y buena resolución, si es posible.</span>
                 </span>
               </button>
@@ -308,12 +367,38 @@ export function PanelPedido({
             )}
           </section>
 
+          {vendedores.length > 0 && (
+            <section className="px-5 py-4">
+              <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-tinta-500">¿Quién te atiende?</h3>
+              <select
+                value={atencion.vendedor?.id ?? ''}
+                onChange={(e) => {
+                  const x = vendedores.find((y) => y.v.id === e.target.value);
+                  setAtencion({ sucursal: x?.s ?? null, vendedor: x?.v ?? null });
+                }}
+                className={`foco h-10 w-full rounded-lg border bg-white px-2 text-sm ${intentoEnviar && !atencion.vendedor ? 'border-red-400' : 'border-tinta-200'}`}
+              >
+                <option value="">Elige la sucursal y el vendedor</option>
+                {sucursales.map((s) => (
+                  <optgroup key={s.id} label={s.nombre}>
+                    {s.vendedores.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.nombre} · {s.nombre}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-tinta-500">El pedido le llega por WhatsApp a esa persona.</p>
+            </section>
+          )}
+
           <section className="px-5 py-4">
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-tinta-500">Datos de la empresa</h3>
+            <h3 className="mb-3 text-xs font-semibold uppercase tracking-wider text-tinta-500">Tus datos</h3>
             <div className="grid gap-3 sm:grid-cols-2">
-              <Campo etiqueta="Empresa *" {...campo('empresa')} placeholder="Razón social" className={intentoEnviar && !cliente.empresa.trim() ? '[&_input]:border-red-400' : ''} />
-              <Campo etiqueta="RIF" {...campo('rif')} placeholder="J-12345678-9" />
-              <Campo etiqueta="Persona de contacto *" {...campo('contacto')} className={intentoEnviar && !cliente.contacto.trim() ? '[&_input]:border-red-400' : ''} />
+              <Campo etiqueta="Nombre o empresa *" {...campo('empresa')} placeholder="Razón social o nombre" className={intentoEnviar && !cliente.empresa.trim() ? '[&_input]:border-red-400' : ''} />
+              <Campo etiqueta="RIF o documento" {...campo('rif')} placeholder="J-12345678-9 / V-12345678" />
+              <Campo etiqueta="Persona de contacto" {...campo('contacto')} />
               <Campo
                 etiqueta="Teléfono / WhatsApp *"
                 type="tel"

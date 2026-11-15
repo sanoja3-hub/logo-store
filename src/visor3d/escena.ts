@@ -4,16 +4,30 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { DecalGeometry } from 'three/examples/jsm/geometries/DecalGeometry.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import type { Forma3D, Ubicacion } from '../core/modelo';
+import type { Forma3D } from '../core/modelo';
+import type { Posicion } from '../core/reglas';
 import { construirPrenda, tocar, type PrendaConstruida } from './prendas';
 
 export interface EstadoVisor {
   forma: Forma3D;
   colorHex: string;
   logo: string | null;
-  ubicacion: Ubicacion;
+  /** Dónde va el logo y de qué tamaño (en cm). Puede ir en varias posiciones a la vez. */
+  marcas: { posicion: Posicion; cm: number }[];
+  /** Ajuste fino del tamaño que ve el cliente (1 = tamaño real elegido). */
   escalaLogo: number;
 }
+
+/** Cara de la prenda desde donde se ve mejor cada posición. */
+export function vistaDe(posicion: Posicion | undefined): Vista {
+  if (!posicion) return 'frente';
+  if (posicion.startsWith('espalda')) return 'espalda';
+  if (posicion.startsWith('manga') || posicion === 'lateral_gorra') return 'lado';
+  return 'frente';
+}
+
+/** Unidades del modelo 3D por centímetro de prenda (aprox.: una franela mide ~0,75 de alto). */
+const POR_CM = 0.0095;
 
 export type Vista = 'frente' | 'espalda' | 'lado';
 
@@ -23,7 +37,7 @@ export class Escena3D {
   private camara: THREE.PerspectiveCamera;
   private controles: OrbitControls;
   private prenda: PrendaConstruida | null = null;
-  private decal: THREE.Mesh | null = null;
+  private decals: THREE.Mesh[] = [];
   private texturaLogo: THREE.Texture | null = null;
   private logoActual: string | null = null;
   private estado: EstadoVisor | null = null;
@@ -153,7 +167,7 @@ export class Escena3D {
         this.escena.remove(this.prenda.grupo);
         liberar(this.prenda.grupo);
       }
-      this.decal = null;
+      this.decals = [];
       this.prenda = construirPrenda(nuevo.forma, nuevo.colorHex);
       this.escena.add(this.prenda.grupo);
       this.encuadrar(true);
@@ -169,21 +183,20 @@ export class Escena3D {
     }
     this.prenda.grupo.updateMatrixWorld(true);
     void this.ponerLogo();
-    if (previo && previo.ubicacion !== nuevo.ubicacion && nuevo.logo) {
-      this.verVista(nuevo.ubicacion === 'espalda' ? 'espalda' : nuevo.ubicacion === 'manga' ? 'lado' : 'frente');
-    }
+    const ultima = nuevo.marcas[nuevo.marcas.length - 1]?.posicion;
+    if (previo && nuevo.logo && ultima && previo.marcas[previo.marcas.length - 1]?.posicion !== ultima) this.verVista(vistaDe(ultima));
   }
 
   private async ponerLogo() {
     const e = this.estado;
     if (!e || !this.prenda) return;
-    if (this.decal) {
-      this.decal.parent?.remove(this.decal);
-      this.decal.geometry.dispose();
-      (this.decal.material as THREE.Material).dispose();
-      this.decal = null;
+    for (const d of this.decals) {
+      d.parent?.remove(d);
+      d.geometry.dispose();
+      (d.material as THREE.Material).dispose();
     }
-    if (!e.logo || e.ubicacion === 'sin_logo') return;
+    this.decals = [];
+    if (!e.logo || e.marcas.length === 0) return;
     if (this.logoActual !== e.logo) {
       this.texturaLogo?.dispose();
       this.texturaLogo = await new THREE.TextureLoader().loadAsync(e.logo);
@@ -196,47 +209,59 @@ export class Escena3D {
     const img = tex.image as { width: number; height: number };
     const proporcion = img.width / img.height;
 
-    const p = this.prenda;
+    for (const marca of e.marcas) this.ponerMarca(e, marca.posicion, marca.cm * POR_CM * e.escalaLogo, tex, proporcion);
+  }
+
+  private ponerMarca(e: EstadoVisor, posicion: Posicion, escala: number, tex: THREE.Texture, proporcion: number) {
+    const p = this.prenda!;
     const caja = new THREE.Box3().setFromObject(p.cuerpo);
     const alto = caja.max.y - caja.min.y;
     let objetivo = p.cuerpo;
     let origen: THREE.Vector3;
     let dir: THREE.Vector3;
-    let base: number;
-    switch (e.ubicacion) {
+    // Pecho izquierdo de quien la viste = derecha de quien mira (x positiva).
+    const lado = posicion === 'pecho_derecho' || posicion === 'manga_derecha' ? -1 : 1;
+    switch (posicion) {
       case 'pecho_centro':
         origen = new THREE.Vector3(0, caja.min.y + alto * 0.74, 2);
         dir = new THREE.Vector3(0, 0, -1);
-        base = 0.13;
         break;
-      case 'espalda':
-        origen = new THREE.Vector3(0, caja.min.y + alto * 0.7, -2);
+      case 'espalda_superior':
+        origen = new THREE.Vector3(0, caja.min.y + alto * 0.82, -2);
         dir = new THREE.Vector3(0, 0, 1);
-        base = 0.22;
         break;
-      case 'manga': {
-        objetivo = p.manga ?? p.cuerpo;
+      case 'espalda_central':
+        origen = new THREE.Vector3(0, caja.min.y + alto * 0.62, -2);
+        dir = new THREE.Vector3(0, 0, 1);
+        break;
+      case 'manga_izquierda':
+      case 'manga_derecha': {
+        objetivo = (lado > 0 ? p.manga : p.mangaOpuesta ?? p.manga) ?? p.cuerpo;
         const cm = new THREE.Box3().setFromObject(objetivo);
         const c = cm.getCenter(new THREE.Vector3());
         const y = cm.max.y - (cm.max.y - cm.min.y) * (e.forma === 'chaqueta' || e.forma === 'camisa' ? 0.22 : 0.45);
-        origen = new THREE.Vector3(c.x + 2, y, 0);
-        dir = new THREE.Vector3(-1, 0, 0);
-        base = 0.075;
+        origen = new THREE.Vector3(c.x + 2 * Math.sign(c.x || lado), y, 0);
+        dir = new THREE.Vector3(-Math.sign(c.x || lado), 0, 0);
         break;
       }
       case 'frente_gorra':
         origen = new THREE.Vector3(0, caja.min.y + alto * 0.42, 2);
         dir = new THREE.Vector3(0, 0, -1);
-        base = 0.13;
         break;
-      default: // pecho izquierdo de quien la viste = derecha de quien mira
-        origen = new THREE.Vector3(e.forma === 'pantalon' ? 0.13 : 0.11, caja.min.y + alto * (e.forma === 'pantalon' ? 0.55 : 0.75), 2);
+      case 'lateral_gorra':
+        origen = new THREE.Vector3(2, caja.min.y + alto * 0.4, 0);
+        dir = new THREE.Vector3(-1, 0, 0);
+        break;
+      case 'bolsillo_pantalon':
+        origen = new THREE.Vector3(0.13, caja.min.y + alto * 0.55, 2);
         dir = new THREE.Vector3(0, 0, -1);
-        base = e.forma === 'pantalon' ? 0.06 : 0.085;
+        break;
+      default:
+        origen = new THREE.Vector3(0.11 * lado, caja.min.y + alto * 0.75, 2);
+        dir = new THREE.Vector3(0, 0, -1);
     }
     const hit = tocar(objetivo, origen, dir);
     if (!hit) return;
-    const escala = base * e.escalaLogo;
     const ancho = proporcion >= 1 ? escala : escala * proporcion;
     const altoLogo = proporcion >= 1 ? escala / proporcion : escala;
     const orientacion = new THREE.Euler();
@@ -253,9 +278,10 @@ export class Escena3D {
       polygonOffset: true,
       polygonOffsetFactor: -4,
     });
-    this.decal = new THREE.Mesh(geo, mat);
+    const decal = new THREE.Mesh(geo, mat);
     // DecalGeometry trabaja en coordenadas del mundo: se agrega a la escena, no al grupo.
-    this.escena.add(this.decal);
+    this.escena.add(decal);
+    this.decals.push(decal);
   }
 
   verVista(v: Vista) {

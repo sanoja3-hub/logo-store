@@ -102,6 +102,18 @@ export function normalizarDesdeLienzo(origen: CanvasImageSource, w: number, h: n
   return { dataUrl, colorHex };
 }
 
+/** Reduce una imagen sin recortarla (para la portada), en WebP o JPEG. */
+export async function reducirImagen(fuente: Blob | string, maxLado = 1800): Promise<string> {
+  const img = await cargarImagen(fuente);
+  const k = Math.min(1, maxLado / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = lienzo(img.naturalWidth * k, img.naturalHeight * k);
+  const ctx = c.getContext('2d')!;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  const url = c.toDataURL('image/webp', 0.86);
+  return url.startsWith('data:image/webp') ? url : c.toDataURL('image/jpeg', 0.88);
+}
+
 export async function normalizarFoto(fuente: Blob | string, maxLado = 900): Promise<FotoNormalizada> {
   const img = await cargarImagen(fuente);
   return normalizarDesdeLienzo(img, img.naturalWidth, img.naturalHeight, maxLado);

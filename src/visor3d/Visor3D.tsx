@@ -19,7 +19,7 @@ export const Visor3D = forwardRef<Visor3DRef, EstadoVisor & { className?: string
   const contenedor = useRef<HTMLDivElement>(null);
   const escena = useRef<Escena3D | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { forma, colorHex, logo, ubicacion, escalaLogo } = props;
+  const { forma, colorHex, logo, marcas, escalaLogo } = props;
 
   useEffect(() => {
     if (!contenedor.current) return;
@@ -39,8 +39,8 @@ export const Visor3D = forwardRef<Visor3DRef, EstadoVisor & { className?: string
   }, []);
 
   useEffect(() => {
-    escena.current?.actualizar({ forma, colorHex, logo, ubicacion, escalaLogo });
-  }, [forma, colorHex, logo, ubicacion, escalaLogo]);
+    escena.current?.actualizar({ forma, colorHex, logo, marcas, escalaLogo });
+  }, [forma, colorHex, logo, marcas, escalaLogo]);
 
   useImperativeHandle(ref, () => ({
     capturar: (vista) => escena.current?.capturar(vista) ?? null,

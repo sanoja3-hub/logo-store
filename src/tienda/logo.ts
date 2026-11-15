@@ -8,21 +8,47 @@ export interface ResultadoLogo {
   avisos: string[];
 }
 
-/** Lee el logo del cliente: acepta PNG (ideal, con fondo transparente) y JPG; avisa si la resolución es baja. */
+/** Primera página de un PDF como PNG con fondo transparente (para ver el logo vectorial sobre la prenda). */
+async function pdfAPng(archivo: File): Promise<string> {
+  const pdfjs = await import('pdfjs-dist');
+  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(await archivo.arrayBuffer()) }).promise;
+  const pagina = await doc.getPage(1);
+  const base = pagina.getViewport({ scale: 1 });
+  const viewport = pagina.getViewport({ scale: Math.min(4, 1400 / Math.max(base.width, base.height)) });
+  const c = document.createElement('canvas');
+  c.width = Math.ceil(viewport.width);
+  c.height = Math.ceil(viewport.height);
+  await pagina.render({ canvas: c, canvasContext: c.getContext('2d')!, viewport, background: 'rgba(0,0,0,0)' }).promise;
+  void doc.cleanup?.();
+  return c.toDataURL('image/png');
+}
+
+/** Lee el logo del cliente: PNG (ideal, con fondo transparente), JPG o PDF; avisa si la resolución es baja. */
 export async function leerLogo(archivo: File): Promise<ResultadoLogo> {
   const avisos: string[] = [];
-  if (!/^image\/(png|jpeg)$/.test(archivo.type)) {
-    return { logo: null, avisos, error: 'El logo debe ser una imagen PNG (o JPG).' };
+  const esPdf = archivo.type === 'application/pdf' || /\.pdf$/i.test(archivo.name);
+  if (!esPdf && !/^image\/(png|jpeg)$/.test(archivo.type)) {
+    return { logo: null, avisos, error: 'El logo debe ser PNG, JPG o PDF.' };
   }
   if (archivo.size > MAX_BYTES) {
     return { logo: null, avisos, error: 'El archivo pesa más de 8 MB. Expórtalo más liviano e inténtalo de nuevo.' };
   }
-  const dataUrl = await new Promise<string>((ok, mal) => {
-    const r = new FileReader();
-    r.onload = () => ok(r.result as string);
-    r.onerror = () => mal(r.error);
-    r.readAsDataURL(archivo);
-  });
+  let dataUrl: string;
+  try {
+    dataUrl = esPdf
+      ? await pdfAPng(archivo)
+      : await new Promise<string>((ok, mal) => {
+          const r = new FileReader();
+          r.onload = () => ok(r.result as string);
+          r.onerror = () => mal(r.error);
+          r.readAsDataURL(archivo);
+        });
+  } catch {
+    return { logo: null, avisos, error: 'No se pudo leer el archivo. Si es un PDF, revisa que no tenga contraseña.' };
+  }
+  if (esPdf) avisos.push('Se muestra la primera página del PDF. Envía el PDF original al asesor por WhatsApp.');
   const img = new Image();
   img.src = dataUrl;
   try {
@@ -35,7 +61,7 @@ export async function leerLogo(archivo: File): Promise<ResultadoLogo> {
 
   // ¿Tiene píxeles transparentes? (revisión sobre una copia reducida)
   let tieneTransparencia = false;
-  if (archivo.type === 'image/png') {
+  if (archivo.type === 'image/png' || esPdf) {
     const k = Math.min(1, 256 / Math.max(ancho, alto));
     const c = document.createElement('canvas');
     c.width = Math.max(1, Math.round(ancho * k));

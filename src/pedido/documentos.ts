@@ -1,8 +1,9 @@
 // Orden de pedido en PDF y Excel para el asesor: datos del cliente, logo, artículos con foto, tallas y totales.
 
 import { formatoDinero } from '../core/dinero';
-import { totalUnidades, type Ajustes, type Cliente, type LineaPedido, type LogoCliente } from '../core/modelo';
-import { subtotal, tallasDelPedido, textoLogo, totales } from './orden';
+import type { Ajustes, Cliente, LineaPedido, LogoCliente, Sucursal, Vendedor } from '../core/modelo';
+import type { Reglas } from '../core/reglas';
+import { cotizarPedido, etiquetaNivel, tallasDelPedido, textoPersonalizacion } from './orden';
 
 export interface DatosOrden {
   numero: string;
@@ -11,6 +12,8 @@ export interface DatosOrden {
   cliente: Cliente;
   logo: LogoCliente | null;
   ajustes: Ajustes;
+  reglas: Reglas;
+  atencion?: { sucursal: Sucursal | null; vendedor: Vendedor | null };
 }
 
 /** Pasa cualquier imagen a JPEG con fondo blanco (o PNG si conserva transparencia), lista para el PDF. */
@@ -98,11 +101,13 @@ export async function ordenPdf(d: DatosOrden): Promise<Blob> {
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   const datos = [
-    d.cliente.rif && `RIF: ${d.cliente.rif}`,
-    `Contacto: ${d.cliente.contacto || '—'}`,
+    d.cliente.rif && `RIF/Documento: ${d.cliente.rif}`,
+    d.cliente.contacto && `Contacto: ${d.cliente.contacto}`,
     `Teléfono: ${d.cliente.telefono || '—'}`,
     d.cliente.correo && `Correo: ${d.cliente.correo}`,
     d.cliente.ciudad && `Entrega: ${d.cliente.ciudad}`,
+    (d.atencion?.vendedor || d.atencion?.sucursal) &&
+      `Atiende: ${[d.atencion?.vendedor?.nombre, d.atencion?.sucursal?.nombre].filter(Boolean).join(' · ')}`,
   ].filter(Boolean) as string[];
   datos.forEach((t, i) => pdf.text(t, M, y + 12 + i * 4.8));
 
@@ -138,10 +143,14 @@ export async function ordenPdf(d: DatosOrden): Promise<Blob> {
   pdf.setTextColor(20, 24, 32);
   y += 3;
 
+  const cot = cotizarPedido(d.lineas, d.reglas);
+  const $ = (c: number | null) => (c === null ? 'por confirmar' : formatoDinero(c, d.ajustes.moneda));
   for (let i = 0; i < d.lineas.length; i++) {
     const l = d.lineas[i];
-    const tallas = Object.keys(l.cantidades);
-    const alto = 46;
+    const c = cot.lineas.get(l.id)!;
+    const tallas = tallasDelPedido([l]);
+    const extras = c.personalizaciones.length + (l.nota ? 1 : 0);
+    const alto = Math.max(46, 44 + extras * 4.5);
     if (y + alto > 280) {
       pdf.addPage();
       encabezado();
@@ -156,7 +165,7 @@ export async function ordenPdf(d: DatosOrden): Promise<Blob> {
       if (!src) continue;
       try {
         const im = await imagenParaDocumento(src, 500);
-        const lado = alto - 6;
+        const lado = 40;
         const k = Math.min(lado / im.w, lado / im.h);
         pdf.addImage(im.url, 'JPEG', x + (lado - im.w * k) / 2, y + 3 + (lado - im.h * k) / 2, im.w * k, im.h * k);
         x += lado + 2;
@@ -172,12 +181,26 @@ export async function ordenPdf(d: DatosOrden): Promise<Blob> {
     pdf.setFontSize(8.5);
     pdf.setTextColor(...gris);
     pdf.text(`Código ${l.codigo || '—'}${l.color ? ` · Color ${l.color.nombre}` : ''}`, tx, y + 12);
-    pdf.text(`Logo: ${textoLogo(l)}`, tx, y + 16.5);
-    if (l.nota) pdf.text(`Nota: ${l.nota}`, tx, y + 21, { maxWidth: W - M - tx - 3 });
+    let ly = y + 16.5;
+    for (const p of c.personalizaciones) {
+      if (p.error) pdf.setTextColor(180, 60, 40);
+      const precio = d.ajustes.mostrarPrecios && !p.error ? ` · ${$(p.precioUnitario)} c/u${p.descuento ? ` (-${p.descuento}%)` : ''}` : '';
+      pdf.text(`+ ${textoPersonalizacion(p)}${p.error ? ` · ${p.error}` : precio}`, tx, ly, { maxWidth: W - M - tx - 34 });
+      pdf.setTextColor(...gris);
+      ly += 4.5;
+    }
+    if (c.personalizaciones.length === 0) {
+      pdf.text('Sin personalización', tx, ly);
+      ly += 4.5;
+    }
+    if (l.nota) {
+      pdf.text(`Nota: ${l.nota}`, tx, ly, { maxWidth: W - M - tx - 34 });
+      ly += 4.5;
+    }
     pdf.setTextColor(20, 24, 32);
 
     // Tabla de tallas
-    const ty = y + 26;
+    const ty = ly + 1;
     const anchoT = Math.min(14, (W - M - tx - 34) / Math.max(1, tallas.length));
     pdf.setFillColor(244, 246, 249);
     pdf.rect(tx, ty, anchoT * tallas.length, 12, 'F');
@@ -198,22 +221,23 @@ export async function ordenPdf(d: DatosOrden): Promise<Blob> {
     pdf.setTextColor(20, 24, 32);
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(12);
-    pdf.text(String(totalUnidades(l)), W - M - 3, ty + 6.5, { align: 'right' });
+    pdf.text(String(c.unidades), W - M - 3, ty + 6.5, { align: 'right' });
     pdf.setFont('helvetica', 'normal');
-    const st = subtotal(l);
-    if (d.ajustes.mostrarPrecios && st !== null && l.precioCentavos !== null) {
+    if (d.ajustes.mostrarPrecios) {
       pdf.setFontSize(8);
       pdf.setTextColor(...gris);
-      pdf.text(`${formatoDinero(l.precioCentavos, d.ajustes.moneda)} c/u · ${formatoDinero(st, d.ajustes.moneda)}`, W - M - 3, ty + 11, {
-        align: 'right',
-      });
+      pdf.text(`Precio ${etiquetaNivel(c.nivel).toLowerCase()}`, W - M - 3, y + 7, { align: 'right' });
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(10);
       pdf.setTextColor(20, 24, 32);
+      pdf.text($(c.subtotal), W - M - 3, y + 12, { align: 'right' });
+      pdf.setFont('helvetica', 'normal');
     }
     y += alto + 4;
   }
 
   // Resumen
-  const t = totales(d.lineas);
+  const t = cot;
   if (y + 30 > 280) {
     pdf.addPage();
     encabezado();
@@ -257,7 +281,8 @@ export async function ordenExcel(d: DatosOrden): Promise<Blob> {
   libro.creator = d.ajustes.empresa;
   const hoja = libro.addWorksheet('Pedido', { views: [{ showGridLines: false }] });
   const tallas = tallasDelPedido(d.lineas);
-  const cols = ['Foto', 'Código', 'Artículo', 'Color', 'Logo', ...tallas, 'Unidades', 'Precio', 'Subtotal', 'Nota'];
+  const cot = cotizarPedido(d.lineas, d.reglas);
+  const cols = ['Foto', 'Código', 'Artículo', 'Color', 'Personalización', ...tallas, 'Unidades', 'Nivel', 'Prenda', 'Personalización c/u', 'Subtotal', 'Nota'];
 
   hoja.mergeCells(1, 1, 1, 6);
   hoja.getCell(1, 1).value = `${d.ajustes.empresa} · Orden de pedido ${d.numero}`;
@@ -265,12 +290,13 @@ export async function ordenExcel(d: DatosOrden): Promise<Blob> {
   const info: [string, string][] = [
     ['Fecha', fechaLarga(d.fecha)],
     ['Empresa', d.cliente.empresa],
-    ['RIF', d.cliente.rif],
+    ['RIF/Documento', d.cliente.rif],
     ['Contacto', d.cliente.contacto],
     ['Teléfono', d.cliente.telefono],
     ['Correo', d.cliente.correo],
     ['Entrega', d.cliente.ciudad],
     ['Notas', d.cliente.notas],
+    ['Atiende', [d.atencion?.vendedor?.nombre, d.atencion?.sucursal?.nombre].filter(Boolean).join(' · ')],
   ];
   info.forEach(([k, v], i) => {
     hoja.getCell(3 + i, 1).value = k;
@@ -301,17 +327,21 @@ export async function ordenExcel(d: DatosOrden): Promise<Blob> {
     const r = filaEnc + 1 + i;
     const fila = hoja.getRow(r);
     fila.height = 70;
-    const st = subtotal(l);
+    const c = cot.lineas.get(l.id)!;
+    fila.height = Math.max(70, 16 * c.personalizaciones.length);
+    const num = (v: number | null) => (v !== null && d.ajustes.mostrarPrecios ? v / 100 : '');
     const valores: (string | number)[] = [
       '',
       l.codigo,
       l.nombre,
       l.color?.nombre ?? '',
-      textoLogo(l),
+      c.personalizaciones.map((p) => `${textoPersonalizacion(p)}${p.error ? ` (no aplicable: ${p.error})` : ''}`).join('\n') || 'Sin personalización',
       ...tallas.map((t) => l.cantidades[t] ?? ''),
-      totalUnidades(l),
-      l.precioCentavos !== null && d.ajustes.mostrarPrecios ? l.precioCentavos / 100 : '',
-      st !== null && d.ajustes.mostrarPrecios ? st / 100 : '',
+      c.unidades,
+      etiquetaNivel(c.nivel),
+      num(c.prendaSubtotal),
+      num(c.personalizacionUnitaria || null),
+      num(c.subtotal),
       l.nota,
     ];
     valores.forEach((v, k) => {
@@ -320,8 +350,7 @@ export async function ordenExcel(d: DatosOrden): Promise<Blob> {
       c.alignment = { vertical: 'middle', horizontal: k >= 5 && k < 5 + tallas.length + 1 ? 'center' : 'left', wrapText: true };
       c.border = { bottom: { style: 'thin', color: { argb: 'FFDEE2E8' } } };
     });
-    fila.getCell(cols.length - 2).numFmt = '#,##0.00';
-    fila.getCell(cols.length - 1).numFmt = '#,##0.00';
+    for (const k of [cols.length - 3, cols.length - 2, cols.length - 1]) fila.getCell(k).numFmt = '#,##0.00';
     if (l.foto) {
       try {
         const im = await imagenParaDocumento(l.foto, 240);
@@ -333,19 +362,19 @@ export async function ordenExcel(d: DatosOrden): Promise<Blob> {
       }
     }
   }
-  const t = totales(d.lineas);
+  const t = cot;
   const rTotal = filaEnc + d.lineas.length + 2;
   hoja.getCell(rTotal, 3).value = 'Total';
   hoja.getCell(rTotal, 3).font = { bold: true };
   hoja.getCell(rTotal, 6 + tallas.length).value = t.unidades;
   hoja.getCell(rTotal, 6 + tallas.length).font = { bold: true };
   if (d.ajustes.mostrarPrecios && t.montoCentavos > 0) {
-    hoja.getCell(rTotal, 8 + tallas.length).value = t.montoCentavos / 100;
-    hoja.getCell(rTotal, 8 + tallas.length).numFmt = '#,##0.00';
-    hoja.getCell(rTotal, 8 + tallas.length).font = { bold: true };
+    hoja.getCell(rTotal, 10 + tallas.length).value = t.montoCentavos / 100;
+    hoja.getCell(rTotal, 10 + tallas.length).numFmt = '#,##0.00';
+    hoja.getCell(rTotal, 10 + tallas.length).font = { bold: true };
   }
   hoja.columns.forEach((c, i) => {
-    c.width = i === 0 ? 14 : i === 2 ? 34 : i === 4 ? 26 : i >= 5 && i < 5 + tallas.length ? 7 : i === cols.length - 1 ? 30 : 13;
+    c.width = i === 0 ? 14 : i === 2 ? 34 : i === 4 ? 40 : i >= 5 && i < 5 + tallas.length ? 7 : i === cols.length - 1 ? 30 : 13;
   });
   const buf = await libro.xlsx.writeBuffer();
   return new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
