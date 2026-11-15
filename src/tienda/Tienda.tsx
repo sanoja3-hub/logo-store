@@ -3,8 +3,19 @@ import { Check, ImagePlus, Search, Settings, ShoppingBag } from 'lucide-react';
 import { ir } from '../ruta';
 import { almacen, cargarCatalogoPublico } from '../core/almacen';
 import { formatoDinero } from '../core/dinero';
-import { CLIENTE_VACIO, type Catalogo, type Cliente, type LineaPedido, type LogoCliente, type Producto } from '../core/modelo';
-import { totales } from '../pedido/orden';
+import {
+  CLIENTE_VACIO,
+  preciosDe,
+  type Catalogo,
+  type Cliente,
+  type LineaPedido,
+  type LogoCliente,
+  type Producto,
+  type Sucursal,
+  type Vendedor,
+} from '../core/modelo';
+import { precioDelNivel, reglasCompletas } from '../core/reglas';
+import { cotizarPedido } from '../pedido/orden';
 import { Foto } from '../ui/comunes';
 import { DetalleProducto } from './DetalleProducto';
 import { PanelPedido } from './PanelPedido';
@@ -21,6 +32,16 @@ export function Tienda() {
   const [abierto, setAbierto] = useState<{ producto: Producto; linea?: LineaPedido } | null>(null);
   const [pedidoAbierto, setPedidoAbierto] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [atencion, setAtencionEstado] = useState<{ sucursal: Sucursal | null; vendedor: Vendedor | null }>({ sucursal: null, vendedor: null });
+  const setAtencion = useCallback((a: { sucursal: Sucursal | null; vendedor: Vendedor | null }) => {
+    setAtencionEstado(a);
+    try {
+      if (a.vendedor) localStorage.setItem(CLAVE_VENDEDOR, a.vendedor.id);
+      else localStorage.removeItem(CLAVE_VENDEDOR);
+    } catch {
+      // sin almacenamiento en este navegador
+    }
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -32,7 +53,18 @@ export function Tienda() {
       ]);
       setCatalogo(catalogo);
       setFuente(fuente);
-      if (l) setLineas(l);
+      if (l) setLineas(l.map(normalizarLinea));
+      // Vendedor que comparte su enlace (?vendedor=id); si no viene, el que eligió el cliente antes.
+      let id = new URLSearchParams(window.location.search).get('vendedor');
+      try {
+        id ??= localStorage.getItem(CLAVE_VENDEDOR);
+      } catch {
+        // sin almacenamiento
+      }
+      for (const s of catalogo.sucursales ?? []) {
+        const v = s.vendedores.find((x) => x.id === id);
+        if (v) setAtencionEstado({ sucursal: s, vendedor: v });
+      }
       if (c) setCliente({ ...CLIENTE_VACIO, ...c });
       if (lg) setLogo(lg);
       setListo(true);
@@ -66,7 +98,7 @@ export function Tienda() {
     return (catalogo?.productos ?? []).filter(
       (p) =>
         (categoria === 'Todas' || p.categoria === categoria) &&
-        (!q || `${p.codigo} ${p.nombre} ${p.descripcion}`.toLowerCase().includes(q)),
+        (!q || `${p.codigo} ${p.nombre} ${p.descripcion} ${p.tela ?? ''}`.toLowerCase().includes(q)),
     );
   }, [catalogo, categoria, busqueda]);
 
@@ -82,7 +114,9 @@ export function Tienda() {
     return <div className="grid min-h-screen place-items-center text-sm text-tinta-500">Cargando catálogo…</div>;
   }
   const { ajustes } = catalogo;
-  const t = totales(lineas);
+  const reglas = reglasCompletas(catalogo.reglas);
+  const sucursales = catalogo.sucursales ?? [];
+  const t = cotizarPedido(lineas, reglas);
 
   return (
     <div className="min-h-screen">
@@ -159,6 +193,17 @@ export function Tienda() {
           </div>
         </section>
 
+        {ajustes.datosDePrueba && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+            Versión de prueba: los precios y el stock son de ejemplo.
+          </div>
+        )}
+        {atencion.vendedor && (
+          <div className="mb-4 rounded-lg border border-tinta-200 bg-white px-3 py-2 text-xs text-tinta-600">
+            Te atiende <b className="text-tinta-900">{atencion.vendedor.nombre}</b>
+            {atencion.sucursal ? ` · ${atencion.sucursal.nombre}` : ''}.
+          </div>
+        )}
         {fuente === 'demo' && (
           <div className="mb-4 rounded-lg border border-acento-100 bg-acento-50 px-3 py-2 text-xs text-acento-600">
             Vista previa del catálogo. Los precios que no trae el catálogo salen «por confirmar» y el asesor los indica al recibir la orden.
@@ -221,16 +266,27 @@ export function Tienda() {
                     </span>
                   </div>
                   <div className="flex flex-1 flex-col gap-1 border-t border-tinta-100 p-3">
-                    <div className="font-mono text-[11px] text-tinta-500">{p.codigo || 'Sin código'}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[11px] text-tinta-500">{p.codigo || 'Sin código'}</span>
+                      {agotadoDe(p) && <span className="rounded bg-red-50 px-1.5 text-[10px] font-medium text-red-700">Agotado</span>}
+                    </div>
                     <div className="line-clamp-2 text-sm font-medium leading-snug text-tinta-900">{p.nombre || 'Artículo sin nombre'}</div>
+                    {p.tela && <div className="text-[11px] text-tinta-500">{p.tela}</div>}
                     <div className="mt-auto flex items-center justify-between gap-2 pt-1.5">
                       <div className="flex -space-x-1">
                         {p.colores.slice(0, 5).map((c) => (
                           <span key={c.nombre} title={c.nombre} className="h-4 w-4 rounded-full ring-2 ring-white" style={{ background: c.hex }} />
                         ))}
                       </div>
-                      {ajustes.mostrarPrecios && p.precioCentavos !== null && (
-                        <div className="text-sm font-semibold text-tinta-900">{formatoDinero(p.precioCentavos, ajustes.moneda)}</div>
+                      {ajustes.mostrarPrecios && precioDelNivel(preciosDe(p), 'detal') !== null && (
+                        <div className="text-right leading-tight">
+                          <div className="text-sm font-semibold text-tinta-900">{formatoDinero(precioDelNivel(preciosDe(p), 'detal')!, ajustes.moneda)}</div>
+                          {preciosDe(p).mayor !== null && (
+                            <div className="text-[10px] text-tinta-500">
+                              Mayor {formatoDinero(preciosDe(p).mayor!, ajustes.moneda)}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -266,6 +322,8 @@ export function Tienda() {
           producto={abierto.producto}
           lineaInicial={abierto.linea}
           ajustes={ajustes}
+          reglas={reglas}
+          unidadesOtras={t.unidades - (abierto.linea ? (t.lineas.get(abierto.linea.id)?.unidades ?? 0) : 0)}
           logo={logo}
           onLogo={setLogo}
           onCerrar={() => setAbierto(null)}
@@ -287,6 +345,10 @@ export function Tienda() {
         logo={logo}
         setLogo={setLogo}
         ajustes={ajustes}
+        reglas={reglas}
+        sucursales={sucursales}
+        atencion={atencion}
+        setAtencion={setAtencion}
         onEditar={(l) => {
           const p = catalogo.productos.find((x) => x.id === l.productoId);
           if (p) {
@@ -309,6 +371,20 @@ export function Tienda() {
       )}
     </div>
   );
+}
+
+const CLAVE_VENDEDOR = 'atelier:vendedor';
+
+const agotadoDe = (p: Producto) => !!p.stock && p.tallas.length > 0 && p.tallas.every((t) => (p.stock?.[t] ?? 1) <= 0);
+
+/** Pedidos guardados por una versión anterior (un solo logo, un solo precio) pasan al formato nuevo. */
+function normalizarLinea(l: LineaPedido): LineaPedido {
+  const vieja = l as LineaPedido & { precioCentavos?: number | null };
+  return {
+    ...l,
+    precios: l.precios ?? { detal: vieja.precioCentavos ?? null, mayor: null, distribuidor: null },
+    personalizaciones: l.personalizaciones ?? [],
+  };
 }
 
 function BuscadorCampo({ valor, onCambio }: { valor: string; onCambio: (v: string) => void }) {

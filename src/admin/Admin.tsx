@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, ArrowLeft, Download, Eye, FileUp, ImagePlus, ImageOff, Plus, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Download, Eye, FileUp, ImagePlus, ImageOff, Lock, Plus, Settings2, Trash2, Upload } from 'lucide-react';
 import { almacen, cargarCatalogoPublico, catalogoVacio } from '../core/almacen';
 import { contarFotos, quitarFotos, type FotoSinAsignar } from '../core/fotos';
-import { aCentavos, formatoDinero } from '../core/dinero';
+import { formatoDinero } from '../core/dinero';
 import { leerTallas } from '../core/interpretar';
-import { FORMAS_3D, nuevoId, type Ajustes, type Catalogo, type Forma3D, type Producto } from '../core/modelo';
+import { aplicarConfiguracion, esConfiguracion, exportarConfiguracion } from '../core/configuracion';
+import { FORMAS_3D, nuevoId, preciosDe, type Ajustes, type Catalogo, type Forma3D, type Producto } from '../core/modelo';
+import { NIVELES, esTallaGrande, reglasCompletas, type Reglas } from '../core/reglas';
+import { CampoPrecio, ReglasForm } from './ReglasForm';
+import { SucursalesForm } from './SucursalesForm';
 import { categoriaDe } from '../importar/armar';
 import { normalizarFoto, reducirImagen } from '../importar/imagenes';
 import { abrirPaquete, aplicarFotos, armarPaquete } from '../importar/paquete';
@@ -13,11 +17,67 @@ import { descargar } from '../pedido/documentos';
 import { ir } from '../ruta';
 import { AreaTexto, Aviso, Boton, Campo, Etiqueta, Foto } from '../ui/comunes';
 
-type Pestana = 'importar' | 'revisar' | 'ajustes' | 'publicar';
+type Pestana = 'importar' | 'revisar' | 'reglas' | 'sucursales' | 'ajustes' | 'publicar';
+
+const CLAVE_PIN = 'atelier:panel-abierto';
+
+/** PIN de demostración: evita que un cliente entre al panel por curiosidad. No es seguridad real. */
+function PedirPin({ pin, onListo }: { pin: string; onListo: () => void }) {
+  const [valor, setValor] = useState('');
+  const [error, setError] = useState(false);
+  return (
+    <div className="grid min-h-screen place-items-center px-4">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (valor === pin) {
+            try {
+              sessionStorage.setItem(CLAVE_PIN, '1');
+            } catch {
+              // sin almacenamiento
+            }
+            onListo();
+          } else setError(true);
+        }}
+        className="w-full max-w-xs rounded-2xl bg-white p-6 text-center shadow-sm ring-1 ring-tinta-200"
+      >
+        <Lock className="mx-auto h-8 w-8 text-tinta-500" />
+        <div className="mt-2 text-base font-semibold">Panel de administración</div>
+        <p className="mt-1 text-xs text-tinta-500">Escribe el PIN para entrar.</p>
+        <input
+          autoFocus
+          type="password"
+          inputMode="numeric"
+          value={valor}
+          onChange={(e) => {
+            setValor(e.target.value);
+            setError(false);
+          }}
+          aria-label="PIN"
+          className={`foco mt-4 h-11 w-full rounded-lg border px-3 text-center text-lg tracking-[0.4em] ${error ? 'border-red-400' : 'border-tinta-200'}`}
+        />
+        {error && <div className="mt-2 text-xs text-red-700">PIN incorrecto.</div>}
+        <Boton type="submit" className="mt-4 w-full">
+          Entrar
+        </Boton>
+        <button type="button" onClick={() => ir('tienda')} className="mt-3 text-xs text-tinta-500 hover:text-tinta-900">
+          Volver al catálogo
+        </button>
+      </form>
+    </div>
+  );
+}
 
 export function Admin() {
   const [cat, setCat] = useState<Catalogo | null>(null);
   const [pestana, setPestana] = useState<Pestana>('importar');
+  const [abierto, setAbierto] = useState(() => {
+    try {
+      return sessionStorage.getItem(CLAVE_PIN) === '1';
+    } catch {
+      return false;
+    }
+  });
 
   useEffect(() => {
     (async () => {
@@ -39,6 +99,8 @@ export function Admin() {
   }, [cat]);
 
   if (!cat) return <div className="grid min-h-screen place-items-center text-sm text-tinta-500">Cargando…</div>;
+  if (!abierto) return <PedirPin pin={cat.ajustes.pin || '1234'} onListo={() => setAbierto(true)} />;
+  const reglas = reglasCompletas(cat.reglas);
   const conAvisos = cat.productos.filter((p) => p.avisos.length > 0).length;
 
   return (
@@ -57,9 +119,11 @@ export function Admin() {
           {(
             [
               ['importar', '1. Importar'],
-              ['revisar', `2. Revisar (${cat.productos.length})`],
-              ['ajustes', '3. Ajustes'],
-              ['publicar', '4. Publicar'],
+              ['revisar', `2. Artículos (${cat.productos.length})`],
+              ['reglas', '3. Precios y reglas'],
+              ['sucursales', `4. Sucursales (${cat.sucursales?.length ?? 0})`],
+              ['ajustes', '5. Ajustes'],
+              ['publicar', '6. Publicar'],
             ] as [Pestana, string][]
           ).map(([k, et]) => (
             <button
@@ -85,7 +149,9 @@ export function Admin() {
             }}
           />
         )}
-        {pestana === 'revisar' && <Revisar cat={cat} setCat={setCat} />}
+        {pestana === 'revisar' && <Revisar cat={cat} setCat={setCat} reglas={reglas} />}
+        {pestana === 'reglas' && <ReglasForm reglas={reglas} moneda={cat.ajustes.moneda} onCambio={(r) => setCat((c) => c && { ...c, reglas: r })} />}
+        {pestana === 'sucursales' && <SucursalesForm sucursales={cat.sucursales ?? []} onCambio={(s) => setCat((c) => c && { ...c, sucursales: s })} />}
         {pestana === 'ajustes' && <AjustesForm ajustes={cat.ajustes} onCambio={(a) => setCat((c) => c && { ...c, ajustes: a })} />}
         {pestana === 'publicar' && <Publicar cat={cat} setCat={setCat} />}
       </main>
@@ -236,7 +302,7 @@ function Importar({ cantidadActual, onImportado }: { cantidadActual: number; onI
   );
 }
 
-function Revisar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | null) => Catalogo | null) => void }) {
+function Revisar({ cat, setCat, reglas }: { cat: Catalogo; setCat: (f: (c: Catalogo | null) => Catalogo | null) => void; reglas: Reglas }) {
   const [soloAvisos, setSoloAvisos] = useState(false);
   const [filtro, setFiltro] = useState('');
   const entradaFotos = useRef<HTMLInputElement>(null);
@@ -372,6 +438,8 @@ function Revisar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | nu
           <FichaEditable
             key={p.id}
             p={p}
+            reglas={reglas}
+            moneda={cat.ajustes.moneda}
             onCambio={(cambios) => cambiar(p.id, cambios)}
             onBorrar={() => setCat((c) => c && { ...c, productos: c.productos.filter((x) => x.id !== p.id) })}
           />
@@ -381,10 +449,23 @@ function Revisar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | nu
   );
 }
 
-function FichaEditable({ p, onCambio, onBorrar }: { p: Producto; onCambio: (c: Partial<Producto>) => void; onBorrar: () => void }) {
+function FichaEditable({
+  p,
+  reglas,
+  moneda,
+  onCambio,
+  onBorrar,
+}: {
+  p: Producto;
+  reglas: Reglas;
+  moneda: string;
+  onCambio: (c: Partial<Producto>) => void;
+  onBorrar: () => void;
+}) {
+  const precios = preciosDe(p);
+  const hayGrandes = p.tallas.some((t) => esTallaGrande(t, reglas));
   const entradaFoto = useRef<HTMLInputElement>(null);
   const [tallasTxt, setTallasTxt] = useState(p.tallas.join(', '));
-  const [precioTxt, setPrecioTxt] = useState(p.precioCentavos !== null ? (p.precioCentavos / 100).toFixed(2).replace('.', ',') : '');
   const [nuevoColor, setNuevoColor] = useState({ nombre: '', hex: '#1f2a44' });
 
   return (
@@ -451,15 +532,19 @@ function FichaEditable({ p, onCambio, onBorrar }: { p: Producto; onCambio: (c: P
               </select>
             </label>
             <Campo etiqueta="Categoría" value={p.categoria} onChange={(e) => onCambio({ categoria: e.target.value })} />
-            <Campo
-              etiqueta="Precio al mayor"
-              value={precioTxt}
-              inputMode="decimal"
-              placeholder="Sin precio"
-              onChange={(e) => setPrecioTxt(e.target.value)}
-              onBlur={() => onCambio({ precioCentavos: aCentavos(precioTxt) })}
-              ayuda={p.precioCentavos !== null ? formatoDinero(p.precioCentavos) : 'Se mostrará «por confirmar»'}
-            />
+            <label className="block">
+              <span className="mb-1 block text-xs font-medium text-tinta-600">Tela</span>
+              <select
+                value={p.tela ?? ''}
+                onChange={(e) => onCambio({ tela: e.target.value || undefined })}
+                className="foco h-10 w-full rounded-lg border border-tinta-200 bg-white px-2 text-sm"
+              >
+                <option value="">Sin indicar (todas las técnicas)</option>
+                {[...new Set([...reglas.telas, ...(p.tela ? [p.tela] : [])])].map((t) => (
+                  <option key={t}>{t}</option>
+                ))}
+              </select>
+            </label>
             <Campo
               etiqueta="Mínimo (uds)"
               type="number"
@@ -520,6 +605,68 @@ function FichaEditable({ p, onCambio, onBorrar }: { p: Producto; onCambio: (c: P
               </div>
             </div>
           </div>
+          <div className="grid gap-3 lg:grid-cols-2">
+            <div>
+              <span className="mb-1 block text-xs font-medium text-tinta-600">Precio por unidad ({moneda})</span>
+              <div className="grid grid-cols-3 gap-2">
+                {NIVELES.map((n) => (
+                  <label key={n.valor} className="block">
+                    <span className="mb-0.5 block text-[11px] text-tinta-500">{n.etiqueta}</span>
+                    <CampoPrecio
+                      valor={precios[n.valor]}
+                      etiqueta={`Precio ${n.etiqueta}`}
+                      onCambio={(c) => onCambio({ precios: { ...precios, [n.valor]: c }, precioCentavos: n.valor === 'detal' ? c : precios.detal })}
+                    />
+                  </label>
+                ))}
+              </div>
+              {hayGrandes && (
+                <>
+                  <span className="mb-0.5 mt-2 block text-[11px] text-tinta-500">
+                    Tallas grandes: vacío = recargo de las reglas (
+                    {reglas.tallasGrandes.tipo === 'porcentaje' ? `+${reglas.tallasGrandes.valor} %` : `+${formatoDinero(reglas.tallasGrandes.valor, moneda)}`})
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {NIVELES.map((n) => (
+                      <CampoPrecio
+                        key={n.valor}
+                        valor={p.preciosGrandes?.[n.valor] ?? null}
+                        etiqueta={`Precio tallas grandes ${n.etiqueta}`}
+                        placeholder="Recargo"
+                        onCambio={(c) => {
+                          const g = { ...p.preciosGrandes, [n.valor]: c };
+                          const vacio = NIVELES.every((x) => g[x.valor] === null || g[x.valor] === undefined);
+                          onCambio({ preciosGrandes: vacio ? undefined : g });
+                        }}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+            <div>
+              <span className="mb-1 block text-xs font-medium text-tinta-600">Stock por talla (vacío = sin control)</span>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(64px,1fr))] gap-2">
+                {p.tallas.map((t) => (
+                  <label key={t} className="block">
+                    <span className="mb-0.5 block text-center text-[11px] text-tinta-500">{t}</span>
+                    <input
+                      type="number"
+                      min={0}
+                      value={p.stock?.[t] ?? ''}
+                      onChange={(e) => {
+                        const st = { ...(p.stock ?? {}) };
+                        if (e.target.value === '') delete st[t];
+                        else st[t] = Math.max(0, Math.floor(Number(e.target.value) || 0));
+                        onCambio({ stock: Object.keys(st).length ? st : undefined });
+                      }}
+                      className="foco h-9 w-full rounded-lg border border-tinta-200 bg-white px-1 text-center text-sm tabular-nums"
+                    />
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
           <div className="flex justify-end">
             <Boton variante="peligro" tamano="sm" onClick={onBorrar}>
               <Trash2 className="h-4 w-4" /> Quitar del catálogo
@@ -564,12 +711,25 @@ function AjustesForm({ ajustes, onCambio }: { ajustes: Ajustes; onCambio: (a: Aj
       <Campo etiqueta="Nombre de la empresa" value={ajustes.empresa} onChange={(e) => set('empresa', e.target.value)} />
       <Campo etiqueta="Lema" value={ajustes.lema} onChange={(e) => set('lema', e.target.value)} />
       <Campo
-        etiqueta="WhatsApp del asesor"
+        etiqueta="WhatsApp general"
         value={ajustes.whatsappAsesor}
         onChange={(e) => set('whatsappAsesor', e.target.value.replace(/[^\d+]/g, ''))}
         placeholder="584141234567"
-        ayuda="Con código de país y sin ceros iniciales. Aquí llegan las órdenes."
+        ayuda="Con código de país. Recibe los pedidos cuando no hay sucursales ni vendedores cargados."
       />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Campo
+          etiqueta="PIN del panel"
+          value={ajustes.pin ?? '1234'}
+          inputMode="numeric"
+          onChange={(e) => set('pin', e.target.value.replace(/\s/g, '') || '1234')}
+          ayuda="Evita que un cliente entre por curiosidad. No es una contraseña segura."
+        />
+        <label className="flex items-center gap-2 pt-6 text-sm">
+          <input type="checkbox" checked={!!ajustes.datosDePrueba} onChange={(e) => set('datosDePrueba', e.target.checked)} className="h-4 w-4 accent-tinta-900" />
+          Avisar a los clientes que los precios y el stock son de prueba
+        </label>
+      </div>
       <Campo etiqueta="Correo del asesor (opcional)" type="email" value={ajustes.correoAsesor} onChange={(e) => set('correoAsesor', e.target.value)} />
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block">
@@ -599,6 +759,7 @@ function Publicar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | n
 
   const publicado = (): Catalogo => ({
     ...cat,
+    reglas: reglasCompletas(cat.reglas),
     publicadoEn: new Date().toISOString(),
     productos: cat.productos.map((p) => ({ ...p, avisos: [] })),
   });
@@ -659,8 +820,18 @@ function Publicar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | n
             >
               <Download className="h-4 w-4" /> {armando ? 'Preparando…' : 'Descargar catalogo.zip'}
             </Boton>
+            <Boton
+              variante="secundario"
+              onClick={() => {
+                const conf = exportarConfiguracion(cat);
+                descargar(new Blob([JSON.stringify(conf, null, 2)], { type: 'application/json' }), `configuracion-${conf.exportadoEn.slice(0, 10)}.json`);
+                setHecho('Se descargó la configuración: reglas, sucursales, precios, telas y stock (sin fotos).');
+              }}
+            >
+              <Settings2 className="h-4 w-4" /> Exportar configuración (JSON)
+            </Boton>
             <Boton variante="secundario" onClick={() => entrada.current?.click()}>
-              <Upload className="h-4 w-4" /> Abrir un catálogo (.zip o .json)
+              <Upload className="h-4 w-4" /> Importar (.zip o .json)
             </Boton>
             <input
               ref={entrada}
@@ -671,6 +842,19 @@ function Publicar({ cat, setCat }: { cat: Catalogo; setCat: (f: (c: Catalogo | n
                 const f = e.target.files?.[0];
                 if (!f) return;
                 try {
+                  if (/\.json$/i.test(f.name)) {
+                    const j = JSON.parse(await f.text());
+                    if (esConfiguracion(j)) {
+                      const r = aplicarConfiguracion(cat, j);
+                      setCat(() => r.catalogo);
+                      setHecho(
+                        `Configuración aplicada: ${r.actualizados} artículos actualizados.` +
+                          (r.sinArticulo.length ? ` Códigos que no están en el catálogo: ${r.sinArticulo.join(', ')}.` : ''),
+                      );
+                      e.target.value = '';
+                      return;
+                    }
+                  }
                   const { catalogo, avisos } = await abrirPaquete(f);
                   setCat(() => catalogo);
                   setHecho([`Se abrió «${f.name}» con ${catalogo.productos.length} artículos.`, ...avisos].join(' '));

@@ -1,5 +1,7 @@
 // Modelo de datos del showroom. El dinero va siempre en centavos enteros (ver dinero.ts).
 
+import type { Personalizacion, Posicion, PreciosNivel, Reglas } from './reglas';
+
 /** Forma 3D con la que se muestra la prenda en el visor. */
 export type Forma3D =
   | 'franela'
@@ -56,8 +58,16 @@ export interface Producto {
   forma: Forma3D;
   colores: ColorProducto[];
   tallas: string[];
-  /** Precio por unidad al mayor, en centavos. null si el catálogo no lo trae. */
+  /** Precio por unidad de versiones anteriores (se toma como detal si no hay `precios`). */
   precioCentavos: number | null;
+  /** Precios por nivel: detal, mayor y distribuidor (en centavos). */
+  precios?: PreciosNivel;
+  /** Precio propio de las tallas grandes, si no se usa el recargo de las reglas. */
+  preciosGrandes?: Partial<PreciosNivel>;
+  /** Tipo de tela (de la lista de telas de las reglas): decide qué técnicas se pueden aplicar. */
+  tela?: string;
+  /** Unidades disponibles por talla. Una talla sin dato no se limita. */
+  stock?: Record<string, number>;
   /** Unidades mínimas por pedido de este artículo (0 = sin mínimo). */
   minimo: number;
   /** Foto del artículo (data URL webp/jpeg) o null si no se pudo leer. Es el frente en la vista «Foto 3D». */
@@ -74,6 +84,19 @@ export interface Producto {
   avisos: string[];
 }
 
+export interface Vendedor {
+  id: string;
+  nombre: string;
+  /** Solo dígitos con código de país (ej. 584141234567). */
+  whatsapp: string;
+}
+
+export interface Sucursal {
+  id: string;
+  nombre: string;
+  vendedores: Vendedor[];
+}
+
 export interface Ajustes {
   empresa: string;
   lema: string;
@@ -82,6 +105,10 @@ export interface Ajustes {
   correoAsesor: string;
   moneda: string;
   mostrarPrecios: boolean;
+  /** PIN del panel (solo para que no entre cualquiera desde el catálogo: no es seguridad real). */
+  pin?: string;
+  /** Muestra el aviso de que los precios y el stock son de prueba. */
+  datosDePrueba?: boolean;
   /** Imagen de portada de la empresa, arriba del catálogo (data URL o `fotos/portada.jpg`). */
   portada?: string | null;
 }
@@ -91,29 +118,31 @@ export interface Catalogo {
   ajustes: Ajustes;
   productos: Producto[];
   publicadoEn: string | null;
+  /** Reglas de precios del cotizador. Si faltan se usan las iniciales. */
+  reglas?: Reglas;
+  sucursales?: Sucursal[];
 }
 
-export type Ubicacion = 'pecho_izquierdo' | 'pecho_centro' | 'espalda' | 'manga' | 'frente_gorra' | 'sin_logo';
-
-export const UBICACIONES: Record<Ubicacion, string> = {
-  pecho_izquierdo: 'Pecho izquierdo',
-  pecho_centro: 'Pecho centro',
-  espalda: 'Espalda',
-  manga: 'Manga',
-  frente_gorra: 'Frente de la gorra',
-  sin_logo: 'Sin logo',
-};
-
-export function ubicacionesPara(forma: Forma3D): Ubicacion[] {
-  if (forma === 'otro') return ['sin_logo'];
-  if (forma === 'gorra') return ['frente_gorra', 'sin_logo'];
-  if (forma === 'pantalon') return ['pecho_izquierdo', 'sin_logo'];
-  if (forma === 'chaleco') return ['pecho_izquierdo', 'pecho_centro', 'espalda', 'sin_logo'];
-  return ['pecho_izquierdo', 'pecho_centro', 'espalda', 'manga', 'sin_logo'];
+/** Posiciones donde se puede personalizar cada tipo de prenda. */
+export function posicionesPara(forma: Forma3D): Posicion[] {
+  switch (forma) {
+    case 'otro':
+      return [];
+    case 'gorra':
+      return ['frente_gorra', 'lateral_gorra'];
+    case 'pantalon':
+      return ['bolsillo_pantalon'];
+    case 'chaleco':
+      return ['pecho_izquierdo', 'pecho_derecho', 'pecho_centro', 'espalda_superior', 'espalda_central'];
+    default:
+      return ['pecho_izquierdo', 'pecho_derecho', 'pecho_centro', 'manga_izquierda', 'manga_derecha', 'espalda_superior', 'espalda_central'];
+  }
 }
 
-export const TECNICAS = ['Bordado', 'Estampado DTF', 'Serigrafía', 'Sublimación', 'Por definir con el asesor'] as const;
-export type Tecnica = (typeof TECNICAS)[number];
+/** Precios del artículo por nivel (los de versiones anteriores pasan como detal). */
+export function preciosDe(p: Pick<Producto, 'precios' | 'precioCentavos'>): PreciosNivel {
+  return p.precios ?? { detal: p.precioCentavos, mayor: null, distribuidor: null };
+}
 
 export interface LineaPedido {
   id: string;
@@ -125,11 +154,13 @@ export interface LineaPedido {
   forma: Forma3D;
   color: ColorProducto | null;
   cantidades: Record<string, number>;
-  precioCentavos: number | null;
-  ubicacion: Ubicacion;
-  tecnica: Tecnica;
+  /** Copia de los precios y la tela del artículo, para cotizar con las reglas. */
+  precios: PreciosNivel;
+  preciosGrandes?: Partial<PreciosNivel>;
+  tela?: string;
+  personalizaciones: Personalizacion[];
   nota: string;
-  /** Captura del visor 3D con el logo puesto, para que el asesor vea cómo lo pidió el cliente. */
+  /** Captura del visor 3D con los logos puestos, para que el asesor vea cómo lo pidió el cliente. */
   vista3d: string | null;
 }
 

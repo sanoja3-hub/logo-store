@@ -10,6 +10,8 @@ export interface PrendaConstruida {
   cuerpo: THREE.Mesh;
   /** Manga izquierda del usuario (a la derecha de quien mira), si existe. */
   manga: THREE.Mesh | null;
+  /** Manga derecha del usuario, si existe. */
+  mangaOpuesta?: THREE.Mesh | null;
   /** Material de la tela, para cambiar el color sin reconstruir. */
   tela: THREE.MeshPhysicalMaterial;
 }
@@ -337,6 +339,7 @@ function superior(forma: Forma3D, tela: THREE.MeshPhysicalMaterial, hex: string)
   grupo.add(borde(t.ruedo, abrigo ? 0.008 : 0.004, abrigo ? ribete : tela));
 
   let mangaIzq: THREE.Mesh | null = null;
+  let mangaDer: THREE.Mesh | null = null;
   if (forma !== 'chaleco') {
     const larga = forma === 'camisa' || forma === 'chaqueta';
     const ang = THREE.MathUtils.degToRad(larga ? 15 : 36);
@@ -354,6 +357,7 @@ function superior(forma: Forma3D, tela: THREE.MeshPhysicalMaterial, hex: string)
       const mm = malla(m.geo, tela);
       grupo.add(mm);
       if (lado === 1) mangaIzq = mm;
+      else mangaDer = mm;
       if (larga) {
         // Puño
         const dirN = dir.clone().normalize();
@@ -433,7 +437,7 @@ function superior(forma: Forma3D, tela: THREE.MeshPhysicalMaterial, hex: string)
     }
   }
 
-  return { grupo, cuerpo, manga: mangaIzq, tela };
+  return { grupo, cuerpo, manga: mangaIzq, mangaOpuesta: mangaDer, tela };
 }
 
 function pantalon(tela: THREE.MeshPhysicalMaterial, hex: string): PrendaConstruida {
